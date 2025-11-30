@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お小遣い管理アプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>💰 お小遣い管理アプリ</h1>
+
+        <!-- 入力フォーム -->
+        <div class="input-section">
+            <h2>収支を記録</h2>
+            <form id="transactionForm">
+                <div class="form-group">
+                    <label for="date">日付:</label>
+                    <input type="date" id="date" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="type">種類:</label>
+                    <select id="type" required>
+                        <option value="income">収入</option>
+                        <option value="expense">支出</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="category">カテゴリ:</label>
+                    <select id="category" required>
+                        <option value="給料">給料</option>
+                        <option value="お小遣い">お小遣い</option>
+                        <option value="食費">食費</option>
+                        <option value="交通費">交通費</option>
+                        <option value="娯楽">娯楽</option>
+                        <option value="その他">その他</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="amount">金額:</label>
+                    <input type="number" id="amount" min="0" step="1" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="memo">メモ:</label>
+                    <input type="text" id="memo" placeholder="メモ（任意）">
+                </div>
+
+                <button type="submit" class="btn-primary">記録する</button>
+            </form>
+        </div>
+
+        <!-- 月選択 -->
+        <div class="month-selector">
+            <label for="monthSelect">表示月:</label>
+            <input type="month" id="monthSelect">
+        </div>
+
+        <!-- 月次集計 -->
+        <div class="summary-section">
+            <h2>今月の集計</h2>
+            <div class="summary-cards">
+                <div class="summary-card income">
+                    <div class="summary-label">収入</div>
+                    <div class="summary-amount" id="totalIncome">¥0</div>
+                </div>
+                <div class="summary-card expense">
+                    <div class="summary-label">支出</div>
+                    <div class="summary-amount" id="totalExpense">¥0</div>
+                </div>
+                <div class="summary-card balance">
+                    <div class="summary-label">残高</div>
+                    <div class="summary-amount" id="balance">¥0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 円グラフ -->
+        <div class="chart-section">
+            <h2>支出の内訳</h2>
+            <canvas id="expenseChart"></canvas>
+        </div>
+
+        <!-- 履歴一覧 -->
+        <div class="history-section">
+            <h2>履歴一覧</h2>
+            <div class="history-list" id="historyList">
+                <!-- JavaScriptで動的に生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
