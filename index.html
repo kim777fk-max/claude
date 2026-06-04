@@ -116,6 +116,8 @@
 
   <div class="tabs">
     <div class="tab active" data-tab="dash">📊 ダッシュボード</div>
+    <div class="tab" data-tab="year">📅 年次（残高推移）</div>
+    <div class="tab" data-tab="daily">🗓 日次一覧</div>
     <div class="tab" data-tab="plan">🎯 月の計画</div>
     <div class="tab" data-tab="import">📥 実績取込</div>
     <div class="tab" data-tab="txns">🧾 明細</div>
@@ -147,10 +149,67 @@
       </div>
     </section>
 
+    <!-- YEAR -->
+    <section id="tab-year" class="hidden">
+      <div class="card">
+        <h2>📅 <span id="y-title">年次</span> 資金推移 — 現金残高の監視</h2>
+        <div class="toolbar">
+          <label class="small muted">年初の現金残高（円）</label>
+          <input class="ipt" id="y-opening" type="number" step="10000" style="max-width:200px" placeholder="例：1500000" />
+          <button class="btn" style="width:auto;padding:9px 18px" id="saveOpening">保存</button>
+          <span class="msg ok" id="openingMsg"></span>
+        </div>
+        <p class="small muted" style="margin-top:-4px">過去・当月は実績、未来月は計画（入金目標・上限）で予測します。残高 ＝ 年初残高 ＋ 毎月の収支の積み上げ。</p>
+      </div>
+
+      <div class="grid3" style="margin-bottom:18px">
+        <div class="stat"><div class="k">現在の現金残高（実績ベース）</div><div class="big-num" id="y-now">—</div><div class="small muted" id="y-now-sub"></div></div>
+        <div class="stat"><div class="k">年末残高 予測</div><div class="big-num" id="y-end">—</div><div class="small muted" id="y-end-sub"></div></div>
+        <div class="stat"><div class="k">年間収支 予測</div><div class="big-num" id="y-net">—</div><div class="small muted">入金予測 − 支出予測</div></div>
+      </div>
+
+      <div class="card">
+        <h2>月別 積み上げ</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>月</th><th>区分</th><th>入金</th><th>支出</th><th>月次収支</th><th>残高（累計）</th><th>状態</th></tr></thead>
+            <tbody id="y-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- DAILY -->
+    <section id="tab-daily" class="hidden">
+      <div class="card">
+        <h2>🗓 <span id="dl-title">日次</span> 一覧 — 日別の入出金と残高</h2>
+        <p class="small muted" style="margin-top:-8px">緑＝入金、赤＝支出。残高は月初残高（前月までの積み上げ）から日々加算。データのあるカテゴリのみ列表示します。</p>
+        <div style="overflow-x:auto">
+          <table id="dl-table" style="min-width:600px">
+            <thead id="dl-head"></thead>
+            <tbody id="dl-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- PLAN -->
     <section id="tab-plan" class="hidden">
       <div class="card">
-        <h2>🎯 月初の計画 — 利用上限を決める</h2>
+        <h2>📤 エクセル/CSVで計画を一括アップロード</h2>
+        <p class="small muted" style="margin-top:-8px">テンプレートをDLしてエクセルで編集（コピペでOK）→ そのままアップ。1ファイルで複数月をまとめて登録できます。列：年月・現金上限・カード上限・入金目標・各カテゴリ上限。</p>
+        <div class="toolbar">
+          <button class="btn secondary" style="width:auto;padding:9px 16px" id="dlTemplate">📄 テンプレートをダウンロード（今年12ヶ月）</button>
+        </div>
+        <div class="drop" id="planDrop">
+          ここに計画CSVをドラッグ＆ドロップ<br><span class="small">またはクリックして選択</span>
+          <input id="planFile" type="file" accept=".csv,text/csv" class="hidden" />
+        </div>
+        <div class="msg" id="planUpMsg" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <h2>🎯 月初の計画 — 利用上限を決める <span class="small muted">（手入力も可）</span></h2>
         <div class="grid3">
           <div><label class="lbl">現金の利用上限（円）</label><input class="ipt" id="p-cash" type="number" min="0" step="1000" placeholder="例：30000" /></div>
           <div><label class="lbl">カードの利用上限（円）</label><input class="ipt" id="p-card" type="number" min="0" step="1000" placeholder="例：200000" /></div>
@@ -265,7 +324,7 @@ document.querySelectorAll(".tab").forEach(t=>{
   t.onclick = ()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
     t.classList.add("active");
-    ["dash","plan","import","txns"].forEach(n=> $("#tab-"+n).classList.add("hidden"));
+    ["dash","year","daily","plan","import","txns"].forEach(n=> $("#tab-"+n).classList.add("hidden"));
     $("#tab-"+t.dataset.tab).classList.remove("hidden");
   };
 });
@@ -288,8 +347,10 @@ async function loadCategories(){
 }
 function normalize(s){ return (s||"").replace(/[・\s]/g,""); }
 
+function curYear(){ return +curMonth().slice(0,4); }
+
 async function reloadAll(){
-  await Promise.all([loadPlanIntoForm(), renderDashboard(), renderTxns()]);
+  await Promise.all([loadPlanIntoForm(), renderDashboard(), renderTxns(), renderYear(), renderDaily()]);
 }
 
 /* ---- PLAN ---- */
@@ -436,6 +497,237 @@ async function renderDashboard(){
   // uncategorized
   const unc = catSpent["null"]||catSpent[null]||0;
   $("#d-cats").innerHTML = catRows + (unc>0?`<tr><td><span class="muted">未分類</span></td><td>—</td><td>${yen(unc)}</td><td>—</td><td>—</td></tr>`:"");
+}
+
+/* ===================== YEAR VIEW ===================== */
+const MONTH_NAMES = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+const WEEK = ["日","月","火","水","木","金","土"];
+const netOf = (t)=> (t.direction==="income"? +t.amount : -t.amount);
+
+async function fetchYearTxns(year){
+  const { data } = await sb.from("expense_transactions").select("*")
+    .gte("txn_date",year+"-01-01").lt("txn_date",(year+1)+"-01-01").order("txn_date");
+  return data||[];
+}
+async function fetchYearOpening(year){
+  const { data } = await sb.from("expense_year_settings").select("*").eq("year",year).maybeSingle();
+  return data;
+}
+
+$("#saveOpening").onclick = async ()=>{
+  const year = curYear();
+  const row = { year, opening_balance:+($("#y-opening").value||0), updated_at:new Date().toISOString() };
+  const { error } = await sb.from("expense_year_settings").upsert(row,{onConflict:"year"});
+  const m=$("#openingMsg");
+  if(error){ m.className="msg err"; m.textContent=error.message; }
+  else { m.className="msg ok"; m.textContent="保存しました ✓"; setTimeout(()=>m.textContent="",2500); renderYear(); renderDaily(); }
+};
+
+async function renderYear(){
+  const year = curYear();
+  $("#y-title").textContent = year+"年";
+  const [txns, ysetting, plansRes] = await Promise.all([
+    fetchYearTxns(year), fetchYearOpening(year),
+    sb.from("expense_monthly_plans").select("*").like("year_month",year+"-%")
+  ]);
+  const opening = +(ysetting?.opening_balance||0);
+  if(document.activeElement!==$("#y-opening")) $("#y-opening").value = ysetting?.opening_balance ?? "";
+  const plans={}; (plansRes.data||[]).forEach(p=> plans[p.year_month]=p);
+
+  // 当月までは実績、未来月は計画
+  const now = new Date();
+  const curYM = now.toISOString().slice(0,7);
+  const curY = now.getFullYear(), curM = now.getMonth()+1;
+
+  // 実績集計
+  const actInc=Array(13).fill(0), actExp=Array(13).fill(0);
+  txns.forEach(t=>{
+    const m = +t.txn_date.slice(5,7);
+    if(t.direction==="income") actInc[m]+=+t.amount; else actExp[m]+=+t.amount;
+  });
+
+  let cum = opening, cumActual = opening, nowBalance = opening, hasActual=false;
+  let endBalance = opening, sumInc=0, sumExp=0;
+  const rows=[];
+  for(let m=1;m<=12;m++){
+    const ym = `${year}-${String(m).padStart(2,"0")}`;
+    const plan = plans[ym];
+    const isFuture = (year>curY) || (year===curY && m>curM);
+    let inc, exp, kind;
+    if(isFuture){
+      inc = +(plan?.income_target||0);
+      exp = +((plan?.cash_limit||0))+ +((plan?.card_limit||0));
+      kind = `<span class="pill y">計画</span>`;
+    }else{
+      inc = actInc[m]; exp = actExp[m];
+      kind = `<span class="pill g">実績</span>`;
+      hasActual=true;
+    }
+    const net = inc-exp;
+    cum += net; endBalance = cum;
+    sumInc+=inc; sumExp+=exp;
+    if(!isFuture){ cumActual += net; nowBalance = cumActual; }
+    const netCol = net>=0 ? "var(--green)" : "var(--red)";
+    const balLow = cum<0;
+    rows.push(`<tr>
+      <td><b>${MONTH_NAMES[m-1]}</b></td>
+      <td>${kind}</td>
+      <td style="color:var(--green)">${inc?yen(inc):"—"}</td>
+      <td style="color:${exp?'var(--red)':'inherit'}">${exp?yen(exp):"—"}</td>
+      <td style="color:${netCol};font-weight:700">${(net>=0?"+":"−")+yen(Math.abs(net)).slice(1)}</td>
+      <td style="font-weight:700;color:${balLow?'var(--red)':'inherit'}">${yen(cum)}</td>
+      <td>${net>=0?'<span class="pill g">黒字</span>':'<span class="pill r">赤字</span>'}</td>
+    </tr>`);
+  }
+  $("#y-rows").innerHTML = rows.join("");
+
+  $("#y-now").textContent = yen(nowBalance);
+  $("#y-now-sub").textContent = hasActual ? `年初¥${opening.toLocaleString()} ＋ 実績の収支` : "実績データがまだありません";
+  $("#y-end").textContent = yen(endBalance);
+  const endDiff = endBalance-opening;
+  $("#y-end-sub").innerHTML = `年初比 <span style="color:${endDiff>=0?'var(--green)':'var(--red)'}">${endDiff>=0?'+':'−'}${yen(Math.abs(endDiff)).slice(1)}</span>`;
+  const ynet = sumInc-sumExp;
+  $("#y-net").textContent = (ynet>=0?"+":"−")+yen(Math.abs(ynet)).slice(1);
+  $("#y-net").style.color = ynet>=0 ? "var(--green)" : "var(--red)";
+}
+
+/* ===================== DAILY LIST ===================== */
+async function renderDaily(){
+  const ym = curMonth(); const year=+ym.slice(0,4), month=+ym.slice(5,7);
+  $("#dl-title").textContent = `${year}年${month}月`;
+  const [yearTxns, ysetting] = await Promise.all([ fetchYearTxns(year), fetchYearOpening(year) ]);
+  const opening = +(ysetting?.opening_balance||0);
+
+  // 月初残高 ＝ 年初残高 ＋ 当月より前の収支（実績）
+  let monthOpening = opening;
+  yearTxns.forEach(t=>{ if(+t.txn_date.slice(5,7) < month) monthOpening += netOf(t); });
+
+  const monthTxns = yearTxns.filter(t=> +t.txn_date.slice(5,7)===month);
+  const catById={}; CATEGORIES.forEach(c=>catById[c.id]=c);
+  const colName=(id)=> id&&catById[id]?catById[id].name:"未分類";
+  const colColor=(id)=> id&&catById[id]?catById[id].color:"#8b98a5";
+
+  // 出現カテゴリ（入金・支出別）
+  const incSet=new Set(), expSet=new Set();
+  const daysInMonth = new Date(year,month,0).getDate();
+  const dayData={}; for(let d=1;d<=daysInMonth;d++) dayData[d]={inc:{},exp:{}};
+  monthTxns.forEach(t=>{
+    const d=+t.txn_date.slice(8,10); const key=t.category_id||"null";
+    if(t.direction==="income"){ incSet.add(key); dayData[d].inc[key]=(dayData[d].inc[key]||0)+ +t.amount; }
+    else { expSet.add(key); dayData[d].exp[key]=(dayData[d].exp[key]||0)+ +t.amount; }
+  });
+  const ord=(k)=> k==="null"?9999:(catById[k]?.sort_order||0);
+  const incCols=[...incSet].sort((a,b)=>ord(a)-ord(b));
+  const expCols=[...expSet].sort((a,b)=>ord(a)-ord(b));
+
+  // ヘッダ
+  let head = `<tr>
+    <th style="position:sticky;left:0;background:var(--panel)">日付</th><th>曜</th>`;
+  incCols.forEach(k=> head+=`<th style="color:#69db7c">${colName(k==="null"?null:+k)}</th>`);
+  if(incCols.length) head+=`<th style="color:#69db7c">入金計</th>`;
+  expCols.forEach(k=> head+=`<th style="color:#ff8787">${colName(k==="null"?null:+k)}</th>`);
+  head+=`<th style="color:#ff8787">出金計</th><th>日次収支</th><th>残高</th></tr>`;
+  $("#dl-head").innerHTML = head;
+
+  const todayD = (year===new Date().getFullYear()&&month===new Date().getMonth()+1)? new Date().getDate():null;
+  let running = monthOpening;
+  let body = `<tr style="background:var(--panel2)">
+    <td style="position:sticky;left:0;background:var(--panel2)"><b>月初</b></td><td></td>
+    ${"<td></td>".repeat(incCols.length+(incCols.length?1:0)+expCols.length+1)}
+    <td class="muted">繰越</td><td style="font-weight:700">${yen(monthOpening)}</td></tr>`;
+
+  for(let d=1;d<=daysInMonth;d++){
+    const dt=new Date(year,month-1,d); const wd=dt.getDay();
+    let dayInc=0, dayExp=0;
+    let cells="";
+    incCols.forEach(k=>{ const v=dayData[d].inc[k]||0; dayInc+=v; cells+=`<td style="color:#69db7c">${v?yen(v).slice(1):""}</td>`; });
+    if(incCols.length) cells+=`<td style="color:#69db7c;font-weight:600">${dayInc?yen(dayInc).slice(1):""}</td>`;
+    expCols.forEach(k=>{ const v=dayData[d].exp[k]||0; dayExp+=v; cells+=`<td style="color:#ff8787">${v?yen(v).slice(1):""}</td>`; });
+    cells+=`<td style="color:#ff8787;font-weight:600">${dayExp?yen(dayExp).slice(1):""}</td>`;
+    const net=dayInc-dayExp; running+=net;
+    const wdColor = wd===0?"#ff8787":(wd===6?"#74c0fc":"var(--muted)");
+    const isToday = d===todayD;
+    body+=`<tr style="${isToday?'background:rgba(77,171,247,.12)':''}">
+      <td style="position:sticky;left:0;background:${isToday?'#1b2733':'var(--panel)'}">${month}/${d}${isToday?' ◀':''}</td>
+      <td style="color:${wdColor}">${WEEK[wd]}</td>
+      ${cells}
+      <td style="font-weight:700;color:${net>0?'var(--green)':(net<0?'var(--red)':'inherit')}">${net?((net>0?"+":"−")+yen(Math.abs(net)).slice(1)):""}</td>
+      <td style="font-weight:700;color:${running<0?'var(--red)':'inherit'}">${yen(running)}</td>
+    </tr>`;
+  }
+  $("#dl-rows").innerHTML = body;
+}
+
+/* ===================== PLAN UPLOAD (Excel/CSV) ===================== */
+function budgetCats(){ return CATEGORIES.filter(c=>c.sort_order<200); }
+
+$("#dlTemplate").onclick = ()=>{
+  const year = curYear();
+  const cats = budgetCats();
+  const header = ["年月","現金上限","カード上限","入金目標", ...cats.map(c=>c.name)];
+  const lines = [header.join(",")];
+  for(let m=1;m<=12;m++){
+    lines.push([`${year}-${String(m).padStart(2,"0")}`, "", "", "", ...cats.map(()=>"")].join(","));
+  }
+  const csv = "﻿"+lines.join("\r\n");   // BOM付きでExcelの文字化け防止
+  const blob = new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=`計画テンプレート_${year}.csv`; a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+const planDrop=$("#planDrop"), planFile=$("#planFile");
+planDrop.onclick=()=>planFile.click();
+["dragenter","dragover"].forEach(e=>planDrop.addEventListener(e,ev=>{ev.preventDefault();planDrop.classList.add("over");}));
+["dragleave","drop"].forEach(e=>planDrop.addEventListener(e,ev=>{ev.preventDefault();planDrop.classList.remove("over");}));
+planDrop.addEventListener("drop",ev=> handlePlanFile(ev.dataTransfer.files[0]));
+planFile.onchange=()=> handlePlanFile(planFile.files[0]);
+
+async function handlePlanFile(file){
+  if(!file) return;
+  const msg=$("#planUpMsg"); msg.className="msg"; msg.textContent="読み込み中…";
+  const buf=await file.arrayBuffer();
+  let text=new TextDecoder("utf-8",{fatal:false}).decode(buf);
+  if((text.match(/�/g)||[]).length>2) text=new TextDecoder("shift-jis").decode(buf);
+  text=text.replace(/^﻿/,"");
+  const rows=parseCSV(text);
+  if(rows.length<2){ msg.className="msg err"; msg.textContent="データが読み取れませんでした。"; return; }
+  await importPlan(rows);
+}
+
+async function importPlan(rows){
+  const msg=$("#planUpMsg");
+  const header=rows[0].map(h=>h.trim());
+  const idx=(names)=>{ for(const n of names){ const i=header.findIndex(h=>h.replace(/\s/g,"")===n||h.replace(/\s/g,"").includes(n)); if(i>=0)return i; } return -1; };
+  const cYM=idx(["年月","月"]), cCash=idx(["現金上限","現金"]), cCard=idx(["カード上限","カード"]), cInc=idx(["入金目標","入金","収入"]);
+  if(cYM<0){ msg.className="msg err"; msg.textContent="「年月」列が見つかりません。テンプレートをご利用ください。"; return; }
+  // カテゴリ列の対応
+  const catCols=[];
+  header.forEach((h,i)=>{ const c=catByName[normalize(h)]; if(c && c.sort_order<200) catCols.push({i,id:c.id}); });
+
+  const num=(s)=>{ const v=parseInt((s||"").replace(/[,¥\s]/g,""),10); return isNaN(v)?0:v; };
+  const planRows=[], budRows=[]; const ymList=[]; let monthsDone=0;
+  for(let r=1;r<rows.length;r++){
+    const row=rows[r]; const ym=(row[cYM]||"").trim().replace(/\//g,"-").slice(0,7);
+    if(!/^\d{4}-\d{2}$/.test(ym)) continue;
+    ymList.push(ym); monthsDone++;
+    planRows.push({ year_month:ym,
+      cash_limit:cCash>=0?num(row[cCash]):0, card_limit:cCard>=0?num(row[cCard]):0,
+      income_target:cInc>=0?num(row[cInc]):0, updated_at:new Date().toISOString() });
+    catCols.forEach(cc=>{ const v=num(row[cc.i]); if(v>0) budRows.push({ year_month:ym, category_id:cc.id, payment_type:"any", limit_amount:v, updated_at:new Date().toISOString() }); });
+  }
+  if(!planRows.length){ msg.className="msg err"; msg.textContent="有効な月の行がありませんでした。"; return; }
+
+  msg.textContent=`${monthsDone}ヶ月分を登録中…`;
+  let { error } = await sb.from("expense_monthly_plans").upsert(planRows,{onConflict:"year_month"});
+  if(error){ msg.className="msg err"; msg.textContent=error.message; return; }
+  // カテゴリ上限は対象月の any を一旦消してから入れ直し
+  for(const ym of ymList){ await sb.from("expense_category_budgets").delete().eq("year_month",ym).eq("payment_type","any"); }
+  if(budRows.length){ ({error}=await sb.from("expense_category_budgets").insert(budRows)); }
+  if(error){ msg.className="msg err"; msg.textContent=error.message; return; }
+  msg.className="msg ok";
+  msg.innerHTML=`計画を登録しました ✓ <b>${monthsDone}ヶ月</b> / カテゴリ上限 ${budRows.length}件`;
+  await reloadAll();
 }
 
 /* ===================== CSV IMPORT (MF ME) ===================== */
