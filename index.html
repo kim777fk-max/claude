@@ -121,6 +121,7 @@
     <div class="tab" data-tab="plan">🎯 月の計画</div>
     <div class="tab" data-tab="import">📥 実績取込</div>
     <div class="tab" data-tab="txns">🧾 明細</div>
+    <div class="tab" data-tab="items">⚙️ 項目設定</div>
   </div>
 
   <main>
@@ -270,6 +271,35 @@
         </div>
       </div>
     </section>
+
+    <!-- ITEMS (項目マスタ) -->
+    <section id="tab-items" class="hidden">
+      <div class="card">
+        <h2>⚙️ 項目設定 — 入金・出金の項目を自由に作る</h2>
+        <p class="small muted" style="margin-top:-8px">ここで作った項目が、日次一覧の「列」になります。会社や用途に合わせて自由に追加・編集・並べ替えできます。</p>
+        <div class="grid3" style="align-items:end">
+          <div><label class="lbl">区分</label>
+            <select class="ipt" id="it-dir"><option value="expense">出金</option><option value="income">入金</option></select></div>
+          <div><label class="lbl">グループ（任意）</label><input class="ipt" id="it-group" type="text" placeholder="例：カード / ローン / 現金" /></div>
+          <div><label class="lbl">項目名</label><input class="ipt" id="it-name" type="text" placeholder="例：JCB / 給与 / 習い事" /></div>
+        </div>
+        <div class="toolbar" style="margin-top:12px">
+          <label class="lbl" style="margin:0">色</label>
+          <input id="it-color" type="color" value="#4dabf7" style="width:48px;height:36px;background:none;border:1px solid var(--line);border-radius:8px" />
+          <button class="btn" style="width:auto;padding:9px 20px" id="addItem">＋ 項目を追加</button>
+          <span class="msg ok" id="itemMsg"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📥 入金項目</h2>
+        <div style="overflow-x:auto"><table><thead><tr><th>並び</th><th>グループ</th><th>項目名</th><th>色</th><th></th></tr></thead><tbody id="it-income"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>📤 出金項目</h2>
+        <div style="overflow-x:auto"><table><thead><tr><th>並び</th><th>グループ</th><th>項目名</th><th>色</th><th></th></tr></thead><tbody id="it-expense"></tbody></table></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -287,8 +317,10 @@ const yen = (n)=> (n==null||isNaN(n)) ? "—" : "¥"+Math.round(n).toLocaleStrin
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 function curMonth(){ return $("#month").value || todayISO().slice(0,7); }
 
-let CATEGORIES = [];   // {id,name,color}
+let CATEGORIES = [];   // {id,name,color,direction,group_name,sort_order}
 let catByName = {};
+const expenseCats = ()=> CATEGORIES.filter(c=>c.direction==="expense");
+const incomeCats  = ()=> CATEGORIES.filter(c=>c.direction==="income");
 
 /* ===================== AUTH ===================== */
 async function refreshSession(){
@@ -324,7 +356,7 @@ document.querySelectorAll(".tab").forEach(t=>{
   t.onclick = ()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
     t.classList.add("active");
-    ["dash","year","daily","plan","import","txns"].forEach(n=> $("#tab-"+n).classList.add("hidden"));
+    ["dash","year","daily","plan","import","txns","items"].forEach(n=> $("#tab-"+n).classList.add("hidden"));
     $("#tab-"+t.dataset.tab).classList.remove("hidden");
   };
 });
@@ -336,9 +368,9 @@ async function loadCategories(){
   CATEGORIES = data||[];
   catByName = {};
   CATEGORIES.forEach(c=> catByName[normalize(c.name)] = c);
-  // plan tab category budget rows
+  // plan tab category budget rows（出金項目のみ）
   const tb = $("#p-cats"); tb.innerHTML="";
-  CATEGORIES.filter(c=>c.sort_order<200).forEach(c=>{
+  expenseCats().forEach(c=>{
     const tr=document.createElement("tr");
     tr.innerHTML = `<td><span class="pill" style="background:${c.color}33;color:${c.color}">${c.name}</span></td>
       <td><input class="ipt catbud" data-cat="${c.id}" type="number" min="0" step="500" style="max-width:160px" /></td>`;
@@ -347,9 +379,60 @@ async function loadCategories(){
 }
 function normalize(s){ return (s||"").replace(/[・\s]/g,""); }
 
+/* ===================== ITEMS (項目マスタ) CRUD ===================== */
+$("#addItem").onclick = async ()=>{
+  const name=$("#it-name").value.trim();
+  if(!name){ const m=$("#itemMsg"); m.className="msg err"; m.textContent="項目名を入力してください"; return; }
+  const dir=$("#it-dir").value;
+  const base=(dir==="income"?200:0);
+  const maxSort=Math.max(base, ...CATEGORIES.filter(c=>c.direction===dir).map(c=>c.sort_order||0));
+  const { error } = await sb.from("expense_categories").insert({
+    name, direction:dir, group_name:$("#it-group").value.trim()||null,
+    color:$("#it-color").value, sort_order:maxSort+10, is_active:true });
+  const m=$("#itemMsg");
+  if(error){ m.className="msg err"; m.textContent=error.message; return; }
+  m.className="msg ok"; m.textContent="追加しました ✓"; setTimeout(()=>m.textContent="",2000);
+  $("#it-name").value=""; $("#it-group").value="";
+  await loadCategories(); renderItems(); renderDaily();
+};
+
+function renderItems(){
+  const draw=(dir,tbodyId)=>{
+    const tb=$(tbodyId);
+    const list=CATEGORIES.filter(c=>c.direction===dir);
+    tb.innerHTML = list.map(c=>`<tr>
+      <td><input class="ipt it-sort" data-id="${c.id}" type="number" value="${c.sort_order}" style="max-width:80px"/></td>
+      <td><input class="ipt it-grp" data-id="${c.id}" type="text" value="${c.group_name||""}" style="max-width:140px"/></td>
+      <td><input class="ipt it-nm" data-id="${c.id}" type="text" value="${c.name}" style="max-width:180px"/></td>
+      <td><input class="it-cl" data-id="${c.id}" type="color" value="${c.color}" style="width:42px;height:32px;background:none;border:1px solid var(--line);border-radius:6px"/></td>
+      <td style="white-space:nowrap">
+        <button class="btn secondary small" style="width:auto;padding:4px 10px" onclick="saveItem(${c.id})">保存</button>
+        <button class="btn secondary small" style="width:auto;padding:4px 10px" onclick="delItem(${c.id})">削除</button>
+      </td></tr>`).join("") || `<tr><td colspan="5" class="muted" style="text-align:center;padding:18px">項目がありません。上で追加してください。</td></tr>`;
+  };
+  draw("income","#it-income"); draw("expense","#it-expense");
+}
+window.saveItem = async (id)=>{
+  const g=(sel)=>document.querySelector(`${sel}[data-id="${id}"]`);
+  const { error } = await sb.from("expense_categories").update({
+    sort_order:+g(".it-sort").value, group_name:g(".it-grp").value.trim()||null,
+    name:g(".it-nm").value.trim(), color:g(".it-cl").value }).eq("id",id);
+  const m=$("#itemMsg");
+  if(error){ m.className="msg err"; m.textContent=error.message; return; }
+  m.className="msg ok"; m.textContent="保存しました ✓"; setTimeout(()=>m.textContent="",2000);
+  await loadCategories(); renderItems(); reloadAll();
+};
+window.delItem = async (id)=>{
+  if(!confirm("この項目を削除しますか？（この項目に紐づく明細は「未分類」になります）")) return;
+  const { error } = await sb.from("expense_categories").update({is_active:false}).eq("id",id);
+  if(error){ alert(error.message); return; }
+  await loadCategories(); renderItems(); reloadAll();
+};
+
 function curYear(){ return +curMonth().slice(0,4); }
 
 async function reloadAll(){
+  renderItems();
   await Promise.all([loadPlanIntoForm(), renderDashboard(), renderTxns(), renderYear(), renderDaily()]);
 }
 
@@ -482,7 +565,7 @@ async function renderDashboard(){
       <td><span class="pill g">収入</span></td></tr>`;
 
   // categories
-  const catRows = CATEGORIES.filter(c=>c.sort_order<200).map(c=>{
+  const catRows = expenseCats().map(c=>{
     const used = catSpent[c.id]||0; const limit = budMap[c.id]||0;
     if(used===0 && !limit) return "";
     const r = limit>0?used/limit:0;
@@ -607,18 +690,17 @@ async function renderDaily(){
   const colName=(id)=> id&&catById[id]?catById[id].name:"未分類";
   const colColor=(id)=> id&&catById[id]?catById[id].color:"#8b98a5";
 
-  // 出現カテゴリ（入金・支出別）
-  const incSet=new Set(), expSet=new Set();
+  // 列＝項目マスタ（定義済みの入金・出金項目すべて）。未分類は明細があれば追加。
   const daysInMonth = new Date(year,month,0).getDate();
   const dayData={}; for(let d=1;d<=daysInMonth;d++) dayData[d]={inc:{},exp:{}};
+  let hasIncNull=false, hasExpNull=false;
   monthTxns.forEach(t=>{
     const d=+t.txn_date.slice(8,10); const key=t.category_id||"null";
-    if(t.direction==="income"){ incSet.add(key); dayData[d].inc[key]=(dayData[d].inc[key]||0)+ +t.amount; }
-    else { expSet.add(key); dayData[d].exp[key]=(dayData[d].exp[key]||0)+ +t.amount; }
+    if(t.direction==="income"){ if(key==="null")hasIncNull=true; dayData[d].inc[key]=(dayData[d].inc[key]||0)+ +t.amount; }
+    else { if(key==="null")hasExpNull=true; dayData[d].exp[key]=(dayData[d].exp[key]||0)+ +t.amount; }
   });
-  const ord=(k)=> k==="null"?9999:(catById[k]?.sort_order||0);
-  const incCols=[...incSet].sort((a,b)=>ord(a)-ord(b));
-  const expCols=[...expSet].sort((a,b)=>ord(a)-ord(b));
+  const incCols = incomeCats().map(c=>String(c.id)).concat(hasIncNull?["null"]:[]);
+  const expCols = expenseCats().map(c=>String(c.id)).concat(hasExpNull?["null"]:[]);
 
   // ヘッダ
   let head = `<tr>
@@ -659,7 +741,7 @@ async function renderDaily(){
 }
 
 /* ===================== PLAN UPLOAD (Excel/CSV) ===================== */
-function budgetCats(){ return CATEGORIES.filter(c=>c.sort_order<200); }
+function budgetCats(){ return expenseCats(); }
 
 $("#dlTemplate").onclick = ()=>{
   const year = curYear();
@@ -703,7 +785,7 @@ async function importPlan(rows){
   if(cYM<0){ msg.className="msg err"; msg.textContent="「年月」列が見つかりません。テンプレートをご利用ください。"; return; }
   // カテゴリ列の対応
   const catCols=[];
-  header.forEach((h,i)=>{ const c=catByName[normalize(h)]; if(c && c.sort_order<200) catCols.push({i,id:c.id}); });
+  header.forEach((h,i)=>{ const c=catByName[normalize(h)]; if(c && c.direction==="expense") catCols.push({i,id:c.id}); });
 
   const num=(s)=>{ const v=parseInt((s||"").replace(/[,¥\s]/g,""),10); return isNaN(v)?0:v; };
   const planRows=[], budRows=[]; const ymList=[]; let monthsDone=0;
@@ -875,9 +957,9 @@ $("#addTxnBtn").onclick = async ()=>{
   const date = prompt("日付 (YYYY-MM-DD)", todayISO()); if(!date) return;
   const desc = prompt("内容（例：ランチ）","") || "";
   const amount = parseInt(prompt("金額（円）","0"),10); if(isNaN(amount)||amount<=0) return;
-  const catList = CATEGORIES.filter(c=>c.sort_order<200).map((c,i)=>`${i+1}:${c.name}`).join("  ");
+  const catList = expenseCats().map((c,i)=>`${i+1}:${c.name}`).join("  ");
   const pick = parseInt(prompt("カテゴリ番号\n"+catList,"1"),10);
-  const cat = CATEGORIES.filter(c=>c.sort_order<200)[pick-1];
+  const cat = expenseCats()[pick-1];
   const { error } = await sb.from("expense_transactions").insert({
     txn_date:date, amount, direction:"expense", payment_type:"cash",
     category_id:cat?cat.id:null, description:desc, source:"manual",
