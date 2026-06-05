@@ -119,6 +119,8 @@
     <div class="tab" data-tab="year">📅 年次（残高推移）</div>
     <div class="tab" data-tab="daily">🗓 日次一覧</div>
     <div class="tab" data-tab="plan">🎯 月の計画</div>
+    <div class="tab" data-tab="cards">💳 カード利用</div>
+    <div class="tab" data-tab="recur">🔁 定期支出</div>
     <div class="tab" data-tab="import">📥 実績取込</div>
     <div class="tab" data-tab="txns">🧾 明細</div>
     <div class="tab" data-tab="items">⚙️ 項目設定</div>
@@ -272,6 +274,68 @@
       </div>
     </section>
 
+    <!-- CARDS (カード利用管理) -->
+    <section id="tab-cards" class="hidden">
+      <div class="card">
+        <h2>💳 カード登録</h2>
+        <p class="small muted" style="margin-top:-8px">使いすぎ防止用。カードごとに月の利用上限を決め、実績と比べて警告します（口座引き落としとは連動しません）。</p>
+        <div class="toolbar">
+          <input class="ipt" id="cd-name" type="text" placeholder="カード名（例：JCB）" style="max-width:200px" />
+          <input id="cd-color" type="color" value="#4dabf7" style="width:46px;height:36px;background:none;border:1px solid var(--line);border-radius:8px" />
+          <input class="ipt" id="cd-pay" type="number" min="1" max="31" placeholder="引落日(任意)" style="max-width:130px" />
+          <button class="btn" style="width:auto;padding:9px 18px" id="addCard">＋ カード追加</button>
+          <span class="msg ok" id="cardMsg"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>💳 カード別 利用状況（<span id="cd-month"></span>）</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>カード</th><th>月の上限</th><th>利用実績</th><th>残り</th><th>使用率</th><th>状態</th></tr></thead>
+            <tbody id="cd-rows"></tbody>
+          </table>
+        </div>
+        <p class="small muted">上限は行内で編集して保存。利用実績はMF取込時にカード名（金融機関）で自動集計されます。</p>
+      </div>
+    </section>
+
+    <!-- RECURRING (定期支出) -->
+    <section id="tab-recur" class="hidden">
+      <div class="card">
+        <h2>🔁 定期支出・定期入金マスタ</h2>
+        <p class="small muted" style="margin-top:-8px">毎月決まった日の引き落とし・入金を登録。「今月分を生成」で日次一覧に予定として自動入力します（変動するものは後で実額に修正）。</p>
+        <div class="grid3" style="align-items:end">
+          <div><label class="lbl">区分</label><select class="ipt" id="rc-dir"><option value="expense">出金</option><option value="income">入金</option></select></div>
+          <div><label class="lbl">名称</label><input class="ipt" id="rc-name" type="text" placeholder="例：ローン保険 / 給与" /></div>
+          <div><label class="lbl">紐づけ項目</label><select class="ipt" id="rc-cat"></select></div>
+        </div>
+        <div class="grid3" style="align-items:end;margin-top:12px">
+          <div><label class="lbl">毎月の発生日</label><input class="ipt" id="rc-day" type="number" min="1" max="31" placeholder="例：27" /></div>
+          <div><label class="lbl">金額（予定）</label><input class="ipt" id="rc-amt" type="number" min="0" step="1000" placeholder="例：30000" /></div>
+          <div><label class="lbl">種別</label><select class="ipt" id="rc-fixed"><option value="true">定額（固定）</option><option value="false">変動（後で修正）</option></select></div>
+        </div>
+        <div class="toolbar" style="margin-top:12px">
+          <button class="btn" style="width:auto;padding:9px 18px" id="addRecur">＋ 定期を追加</button>
+          <span class="msg ok" id="recurMsg"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>登録済みの定期</h2>
+        <div class="toolbar">
+          <button class="btn secondary" style="width:auto;padding:9px 16px" id="genRecur">▶ 今月分（<span id="rc-genmonth"></span>）を日次に生成</button>
+          <span class="msg ok" id="genMsg"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>名称</th><th>区分</th><th>発生日</th><th>金額</th><th>種別</th><th></th></tr></thead>
+            <tbody id="rc-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- ITEMS (項目マスタ) -->
     <section id="tab-items" class="hidden">
       <div class="card">
@@ -319,8 +383,13 @@ function curMonth(){ return $("#month").value || todayISO().slice(0,7); }
 
 let CATEGORIES = [];   // {id,name,color,direction,group_name,sort_order}
 let catByName = {};
+let CARDS = [];
 const expenseCats = ()=> CATEGORIES.filter(c=>c.direction==="expense");
 const incomeCats  = ()=> CATEGORIES.filter(c=>c.direction==="income");
+async function loadCards(){
+  const { data } = await sb.from("expense_cards").select("*").eq("is_active",true).order("sort_order");
+  CARDS = data||[];
+}
 
 /* ===================== AUTH ===================== */
 async function refreshSession(){
@@ -333,6 +402,7 @@ async function enterApp(user){
   $("#whoami").textContent = user.email;
   if(!$("#month").value) $("#month").value = todayISO().slice(0,7);
   await loadCategories();
+  await loadCards();
   await reloadAll();
 }
 function authMsg(t,ok){ const m=$("#authMsg"); m.textContent=t; m.className="msg "+(ok?"ok":"err"); }
@@ -356,7 +426,7 @@ document.querySelectorAll(".tab").forEach(t=>{
   t.onclick = ()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
     t.classList.add("active");
-    ["dash","year","daily","plan","import","txns","items"].forEach(n=> $("#tab-"+n).classList.add("hidden"));
+    ["dash","year","daily","plan","cards","recur","import","txns","items"].forEach(n=> $("#tab-"+n).classList.add("hidden"));
     $("#tab-"+t.dataset.tab).classList.remove("hidden");
   };
 });
@@ -432,8 +502,8 @@ window.delItem = async (id)=>{
 function curYear(){ return +curMonth().slice(0,4); }
 
 async function reloadAll(){
-  renderItems();
-  await Promise.all([loadPlanIntoForm(), renderDashboard(), renderTxns(), renderYear(), renderDaily()]);
+  renderItems(); renderRecurring(); populateRecurCat();
+  await Promise.all([loadPlanIntoForm(), renderDashboard(), renderTxns(), renderYear(), renderDaily(), renderCards()]);
 }
 
 /* ---- PLAN ---- */
@@ -812,6 +882,121 @@ async function importPlan(rows){
   await reloadAll();
 }
 
+/* ===================== CARDS (利用管理) ===================== */
+$("#addCard").onclick = async ()=>{
+  const name=$("#cd-name").value.trim();
+  if(!name){ const m=$("#cardMsg"); m.className="msg err"; m.textContent="カード名を入力"; return; }
+  const maxSort=Math.max(0,...CARDS.map(c=>c.sort_order||0));
+  const { error } = await sb.from("expense_cards").insert({
+    name, color:$("#cd-color").value, payment_day:+($("#cd-pay").value)||null, sort_order:maxSort+10 });
+  const m=$("#cardMsg");
+  if(error){ m.className="msg err"; m.textContent=error.message; return; }
+  m.className="msg ok"; m.textContent="追加しました ✓"; setTimeout(()=>m.textContent="",2000);
+  $("#cd-name").value=""; $("#cd-pay").value="";
+  await loadCards(); renderCards();
+};
+window.delCard = async (id)=>{
+  if(!confirm("このカードを削除しますか？")) return;
+  await sb.from("expense_cards").update({is_active:false}).eq("id",id);
+  await loadCards(); renderCards();
+};
+window.saveCardLimit = async (id)=>{
+  const ym=curMonth();
+  const v=+(document.querySelector(`.cdlim[data-id="${id}"]`).value||0);
+  const { error } = await sb.from("expense_card_limits")
+    .upsert({card_id:id, year_month:ym, limit_amount:v, updated_at:new Date().toISOString()},{onConflict:"card_id,year_month"});
+  const m=$("#cardMsg");
+  if(error){ m.className="msg err"; m.textContent=error.message; }
+  else { m.className="msg ok"; m.textContent="上限を保存 ✓"; setTimeout(()=>m.textContent="",2000); renderCards(); }
+};
+async function renderCards(){
+  const ym=curMonth(); $("#cd-month").textContent=ym;
+  if(!CARDS.length){ $("#cd-rows").innerHTML=`<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">カード未登録。上で追加してください。</td></tr>`; return; }
+  const [txns, limRes] = await Promise.all([ fetchMonthTxns(), sb.from("expense_card_limits").select("*").eq("year_month",ym) ]);
+  const limMap={}; (limRes.data||[]).forEach(l=> limMap[l.card_id]=+l.limit_amount);
+  const usage={};
+  txns.forEach(t=>{ if(t.direction==="expense" && t.card_id){ usage[t.card_id]=(usage[t.card_id]||0)+ +t.amount; } });
+  $("#cd-rows").innerHTML = CARDS.map(c=>{
+    const used=usage[c.id]||0; const lim=limMap[c.id]||0; const remain=lim-used; const r=lim>0?used/lim:0;
+    return `<tr>
+      <td><span class="pill" style="background:${c.color}33;color:${c.color}">${c.name}</span></td>
+      <td><input class="ipt cdlim" data-id="${c.id}" type="number" min="0" step="1000" value="${lim||""}" style="max-width:130px"/>
+          <button class="btn secondary small" style="width:auto;padding:4px 8px" onclick="saveCardLimit(${c.id})">保存</button></td>
+      <td>${yen(used)}<div class="bar"><span style="width:${Math.min(100,r*100)}%;background:${barColor(r)}"></span></div></td>
+      <td style="color:${remain<0?'var(--red)':'var(--txt)'};font-weight:700">${lim>0?yen(remain):"—"}</td>
+      <td>${lim>0?Math.round(r*100)+"%":"—"}</td>
+      <td>${statusPill(used,lim)}<button class="btn secondary small" style="width:auto;padding:4px 8px;margin-left:6px" onclick="delCard(${c.id})">削除</button></td>
+    </tr>`;
+  }).join("");
+}
+
+/* ===================== RECURRING (定期) ===================== */
+function populateRecurCat(){
+  const dir=$("#rc-dir").value;
+  const list=CATEGORIES.filter(c=>c.direction===dir);
+  $("#rc-cat").innerHTML = `<option value="">（紐づけなし）</option>`+list.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+}
+$("#rc-dir").onchange = populateRecurCat;
+
+$("#addRecur").onclick = async ()=>{
+  const name=$("#rc-name").value.trim(); const day=+$("#rc-day").value;
+  const m=$("#recurMsg");
+  if(!name || !day){ m.className="msg err"; m.textContent="名称と発生日は必須"; return; }
+  const dir=$("#rc-dir").value;
+  const { error } = await sb.from("expense_recurring").insert({
+    name, direction:dir, category_id:$("#rc-cat").value?+$("#rc-cat").value:null,
+    payment_type: dir==="income"?"bank":"bank",
+    day_of_month:Math.min(31,Math.max(1,day)), amount:+($("#rc-amt").value||0),
+    is_fixed: $("#rc-fixed").value==="true" });
+  if(error){ m.className="msg err"; m.textContent=error.message; return; }
+  m.className="msg ok"; m.textContent="追加しました ✓"; setTimeout(()=>m.textContent="",2000);
+  $("#rc-name").value=""; $("#rc-day").value=""; $("#rc-amt").value="";
+  renderRecurring();
+};
+window.delRecur = async (id)=>{
+  if(!confirm("この定期を削除しますか？")) return;
+  await sb.from("expense_recurring").update({is_active:false}).eq("id",id);
+  renderRecurring();
+};
+async function renderRecurring(){
+  $("#rc-genmonth").textContent = curMonth();
+  const { data } = await sb.from("expense_recurring").select("*").eq("is_active",true).order("direction").order("day_of_month");
+  const list=data||[];
+  const catById={}; CATEGORIES.forEach(c=>catById[c.id]=c);
+  $("#rc-rows").innerHTML = list.map(r=>`<tr>
+    <td>${r.name}${r.category_id&&catById[r.category_id]?` <span class="small muted">(${catById[r.category_id].name})</span>`:""}</td>
+    <td>${r.direction==="income"?'<span class="pill g">入金</span>':'<span class="pill r">出金</span>'}</td>
+    <td>毎月${r.day_of_month}日</td>
+    <td>${yen(r.amount)}</td>
+    <td class="small">${r.is_fixed?"定額":"変動"}</td>
+    <td><button class="btn secondary small" style="width:auto;padding:4px 10px" onclick="delRecur(${r.id})">削除</button></td>
+  </tr>`).join("") || `<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">定期が未登録です。</td></tr>`;
+}
+$("#genRecur").onclick = async ()=>{
+  const ym=curMonth(); const year=+ym.slice(0,4), month=+ym.slice(5,7);
+  const daysInMonth=new Date(year,month,0).getDate();
+  const m=$("#genMsg"); m.className="msg"; m.textContent="生成中…";
+  const { data } = await sb.from("expense_recurring").select("*").eq("is_active",true);
+  const list=(data||[]).filter(r=>{
+    if(r.active_from && ym < r.active_from) return false;
+    if(r.active_to   && ym > r.active_to)   return false;
+    return true;
+  });
+  if(!list.length){ m.className="msg err"; m.textContent="生成対象の定期がありません。"; return; }
+  const recs=list.map(r=>{
+    const day=Math.min(r.day_of_month,daysInMonth);
+    return { txn_date:`${ym}-${String(day).padStart(2,"0")}`, amount:Math.abs(+r.amount),
+      direction:r.direction, payment_type:r.payment_type, category_id:r.category_id,
+      description:r.name, source:"recurring", external_id:`recurring:${r.id}:${ym}` };
+  });
+  const { data:ins, error } = await sb.from("expense_transactions")
+    .upsert(recs,{onConflict:"external_id",ignoreDuplicates:true}).select("id");
+  if(error){ m.className="msg err"; m.textContent=error.message; return; }
+  const n=ins?.length||0;
+  m.className="msg ok"; m.innerHTML=`生成完了 ✓ 新規 <b>${n}件</b> / 既存スキップ ${recs.length-n}件`;
+  await reloadAll();
+};
+
 /* ===================== CSV IMPORT (MF ME) ===================== */
 const drop=$("#drop"), fileInput=$("#file");
 drop.onclick=()=>fileInput.click();
@@ -893,8 +1078,11 @@ async function importMF(rows, fileName){
     if(!/^\d{4}-\d{2}-\d{2}/.test(dateStr)){ skipped++; continue; }
     const inst = get(ci.inst);
     const direction = amt<0 ? "expense" : "income";
+    // 登録カードと金融機関名を突合（カード利用の自動集計用）
+    const card = CARDS.find(c=> inst && (inst.includes(c.name) || normalize(inst).includes(normalize(c.name))));
     let payment = "card";
     if(/現金|ウォレット|財布/.test(inst)) payment="cash";
+    else if(card) payment="card";
     else if(direction==="income") payment="bank";
     const mfCat = get(ci.cat);
     const matched = catByName[normalize(mfCat)];
@@ -904,7 +1092,7 @@ async function importMF(rows, fileName){
     recs.push({
       txn_date:dateStr.slice(0,10),
       amount:Math.abs(amt),
-      direction, payment_type:payment, category_id:catId,
+      direction, payment_type:payment, category_id:catId, card_id: card?card.id:null,
       description:get(ci.name)||null, institution:inst||null,
       memo:memoParts.join(" / ")||null, source:"mf",
       external_id: ci.id>=0 && get(ci.id) ? ("mf:"+get(ci.id)) : ("mf:"+dateStr+":"+amt+":"+(get(ci.name)||"")),
