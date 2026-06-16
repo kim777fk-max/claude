@@ -46,6 +46,8 @@ async function runOp(op, input, out) {
     case "music": {
       if (!op.music_url) throw new Error("music requires music_url");
       const env = { ...process.env, MODE: op.music_mode || "mix" };
+      if (op.music_volume != null) env.MUSIC_VOL = String(op.music_volume);
+      if (op.fade_seconds != null) env.FADE = String(op.fade_seconds);
       await run2("music.sh", [input, op.music_url, out], env);
       return out;
     }
