@@ -327,8 +327,14 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.remove(), 2600);
 }
 
-// ---- service worker ----
+// ---- service worker (auto-reload once when a new version takes control) ----
 if ('serviceWorker' in navigator) {
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
