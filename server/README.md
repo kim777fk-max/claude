@@ -5,10 +5,12 @@
 | エンドポイント | 役割 |
 |---|---|
 | `POST /api/sign` | ブラウザからの**署名アップロード**用の署名を返す（未署名プリセット不要・APIシークレットはサーバーに留まる） |
-| `POST /api/edit` | `{ url, prompt }` を受け取り、**Claudeが編集プランを作成** → ffmpegで実行 → Cloudinaryへアップ → `secure_url` を返す |
+| `POST /api/edit` | `{ url \| urls[], prompt }` を受け取り、**非同期ジョブを開始**して `{ jobId }` を即返す（長尺でもタイムアウトしない） |
+| `GET /api/job/:id` | ジョブ状態を返す（`queued`/`running`/`done`/`error`）。`done` で `secure_url` を含む |
 
 `/api/edit` は親フォルダの `scripts/`（cut/concat/telop/music）を呼び出します。Claudeが出せるのは
 ホワイトリスト化した操作（カット/テロップ/BGM/結合）だけで、任意コマンド実行はできません。
+ジョブはメモリ上で1件ずつ順番に処理します（単一インスタンス前提のMVP）。
 
 ## セットアップ
 
