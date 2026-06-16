@@ -11,7 +11,8 @@ function loadCfg() {
 function saveCfg(cfg) { localStorage.setItem(LS_KEY, JSON.stringify(cfg)); }
 let cfg = loadCfg();
 
-function cfgReady() { return cfg.cloud && cfg.preset; }
+// Ready if we can upload: either an unsigned preset, or a backend that signs.
+function cfgReady() { return (cfg.cloud && cfg.preset) || cfg.backend; }
 function refreshSetupNotice() {
   $('setupNotice').classList.toggle('hidden', cfgReady());
 }
@@ -21,6 +22,7 @@ function openSettings() {
   $('cfgCloud').value = cfg.cloud || '';
   $('cfgPreset').value = cfg.preset || '';
   $('cfgFolder').value = cfg.folder || 'claude-edits';
+  $('cfgBackend').value = cfg.backend || '';
   $('settings').showModal();
 }
 $('settingsBtn').addEventListener('click', openSettings);
@@ -31,9 +33,11 @@ $('settings').addEventListener('close', () => {
       cloud: $('cfgCloud').value.trim(),
       preset: $('cfgPreset').value.trim(),
       folder: $('cfgFolder').value.trim() || 'claude-edits',
+      backend: $('cfgBackend').value.trim().replace(/\/$/, ''),
     };
     saveCfg(cfg);
     refreshSetupNotice();
+    updateAutoEnabled();
     toast('設定を保存しました');
   }
 });
@@ -61,57 +65,118 @@ $('file').addEventListener('change', (e) => {
   $('uploadBtn').disabled = false;
   $('result').classList.add('hidden');
   $('progressWrap').classList.add('hidden');
+  $('autoStatus').classList.add('hidden');
+  $('autoResult').classList.add('hidden');
   updateHandoffEnabled();
+  updateAutoEnabled();
 });
 
-// ---- upload to Cloudinary (unsigned) ----
-$('uploadBtn').addEventListener('click', () => {
+// ---- upload to Cloudinary (signed via backend, or unsigned via preset) ----
+$('uploadBtn').addEventListener('click', async () => {
   if (!selectedFile) return;
   if (!cfgReady()) { openSettings(); return; }
-
-  const fd = new FormData();
-  fd.append('file', selectedFile);
-  fd.append('upload_preset', cfg.preset);
-  if (cfg.folder) fd.append('folder', cfg.folder);
-  fd.append('tags', 'claude-edit-app');
-
-  const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloud)}/auto/upload`;
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', endpoint);
-
   $('uploadBtn').disabled = true;
   $('progressWrap').classList.remove('hidden');
   setProgress(0);
+  try {
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    let cloud = cfg.cloud;
 
-  xhr.upload.onprogress = (ev) => {
-    if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
-  };
-  xhr.onload = () => {
-    $('uploadBtn').disabled = false;
-    if (xhr.status >= 200 && xhr.status < 300) {
-      const res = JSON.parse(xhr.responseText);
-      uploaded = { public_id: res.public_id, secure_url: res.secure_url };
-      setProgress(100);
-      $('rPublicId').textContent = res.public_id;
-      const a = $('rUrl');
-      a.href = res.secure_url; a.textContent = res.secure_url;
-      $('result').classList.remove('hidden');
-      updateHandoffEnabled();
-      buildHandoff();
-      toast('アップロード完了');
+    if (cfg.backend) {
+      // signed upload — backend returns a signature; no preset needed
+      const sign = await fetch(cfg.backend + '/api/sign', { method: 'POST' }).then((r) => {
+        if (!r.ok) throw new Error('sign failed (' + r.status + ')');
+        return r.json();
+      });
+      cloud = sign.cloudName;
+      fd.append('api_key', sign.apiKey);
+      fd.append('timestamp', sign.timestamp);
+      fd.append('signature', sign.signature);
+      if (sign.folder) fd.append('folder', sign.folder);
     } else {
-      let msg = `エラー (${xhr.status})`;
-      try { msg += ': ' + (JSON.parse(xhr.responseText).error.message); } catch {}
-      toast(msg);
-      $('progressWrap').classList.add('hidden');
+      // unsigned upload via preset
+      fd.append('upload_preset', cfg.preset);
+      if (cfg.folder) fd.append('folder', cfg.folder);
     }
-  };
-  xhr.onerror = () => {
-    $('uploadBtn').disabled = false;
+
+    const res = await uploadXHR(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud)}/auto/upload`, fd);
+    uploaded = { public_id: res.public_id, secure_url: res.secure_url };
+    setProgress(100);
+    $('rPublicId').textContent = res.public_id;
+    const a = $('rUrl');
+    a.href = res.secure_url; a.textContent = res.secure_url;
+    $('result').classList.remove('hidden');
+    updateHandoffEnabled();
+    updateAutoEnabled();
+    buildHandoff();
+    toast('アップロード完了');
+  } catch (err) {
     $('progressWrap').classList.add('hidden');
-    toast('通信エラー。設定とネットワークを確認してください');
-  };
-  xhr.send(fd);
+    toast('アップロード失敗: ' + (err.message || err));
+  } finally {
+    $('uploadBtn').disabled = false;
+  }
+});
+
+// XHR upload with progress, resolved as parsed JSON.
+function uploadXHR(endpoint, fd) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', endpoint);
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        let msg = 'エラー (' + xhr.status + ')';
+        try { msg = JSON.parse(xhr.responseText).error.message; } catch {}
+        reject(new Error(msg));
+      }
+    };
+    xhr.onerror = () => reject(new Error('通信エラー'));
+    xhr.send(fd);
+  });
+}
+
+// ---- auto edit via backend ----
+function updateAutoEnabled() {
+  const ok = !!uploaded && !!cfg.backend;
+  $('autoBtn').classList.toggle('hidden', !cfg.backend);
+  $('autoBtn').disabled = !ok;
+}
+
+$('autoBtn').addEventListener('click', async () => {
+  if (!uploaded || !cfg.backend) return;
+  const prompt = $('prompt').value.trim();
+  if (!prompt) { toast('やりたいことを書いてください'); return; }
+  $('autoBtn').disabled = true;
+  $('autoStatus').classList.remove('hidden');
+  $('autoStatus').textContent = '編集中… (動画の長さによって時間がかかります)';
+  $('autoResult').classList.add('hidden');
+  try {
+    const res = await fetch(cfg.backend + '/api/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: uploaded.secure_url, prompt }),
+    }).then((r) => r.json());
+    if (!res.ok) throw new Error(res.error || 'failed');
+    if (res.skipped) {
+      $('autoStatus').textContent = '編集なし: ' + (res.note || '');
+    } else {
+      $('autoStatus').textContent = res.note || '完了';
+      const a = $('autoUrl');
+      a.href = res.secure_url; a.textContent = res.secure_url;
+      $('autoResult').classList.remove('hidden');
+      toast('編集が完了しました');
+    }
+  } catch (err) {
+    $('autoStatus').textContent = '失敗: ' + (err.message || err);
+  } finally {
+    $('autoBtn').disabled = false;
+  }
 });
 
 function setProgress(p) {
@@ -196,3 +261,4 @@ if ('serviceWorker' in navigator) {
 }
 
 refreshSetupNotice();
+updateAutoEnabled();

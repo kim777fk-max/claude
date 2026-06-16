@@ -68,6 +68,11 @@
         <button id="copyBtn" class="btn primary" disabled>Claude用にコピー</button>
         <button id="shareBtn" class="btn" disabled>共有</button>
       </div>
+      <button id="autoBtn" class="btn primary hidden" disabled>⚡ 自動で編集する</button>
+      <div id="autoStatus" class="meta hidden"></div>
+      <div id="autoResult" class="result hidden">
+        <div class="kv"><span>編集後</span><a id="autoUrl" target="_blank" rel="noopener"></a></div>
+      </div>
       <pre id="handoff" class="handoff hidden"></pre>
     </section>
 
@@ -88,14 +93,16 @@
       <label>保存先フォルダ（任意）
         <input id="cfgFolder" type="text" placeholder="claude-edits" autocapitalize="off" autocorrect="off" />
       </label>
+      <label>バックエンドURL（任意・自動編集用）
+        <input id="cfgBackend" type="url" placeholder="https://your-server.example.com" autocapitalize="off" autocorrect="off" />
+      </label>
       <details class="help">
-        <summary>プリセットの作り方（初回のみ）</summary>
-        <ol>
-          <li>Cloudinary コンソール → Settings → Upload</li>
-          <li>「Upload presets」→ Add upload preset</li>
-          <li><b>Signing Mode</b> を <b>Unsigned</b> に設定して保存</li>
-          <li>そのプリセット名をここに入力</li>
-        </ol>
+        <summary>2つの使い方</summary>
+        <ul>
+          <li><b>プリセット方式（手軽）</b>：未署名プリセットを作り、ファイル名＋プロンプトをコピーして Claude に貼る。<br>
+            作り方：Cloudinary → Settings → Upload → Add upload preset → <b>Signing Mode = Unsigned</b>。</li>
+          <li><b>バックエンド方式（自動）</b>：上に server URL を入れると、プリセット不要の署名アップロード＋「自動で編集」ボタンが使えます（プロンプトから編集してリンクを返す）。</li>
+        </ul>
       </details>
       <div class="actions">
         <button value="cancel" class="btn">閉じる</button>

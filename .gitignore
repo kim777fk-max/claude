@@ -20,3 +20,8 @@ media/out/*
 # App icons are part of the PWA — keep them despite the *.png rule above.
 !app/icons/
 !app/icons/*.png
+
+# Node backend
+node_modules/
+server/.env
+.env
