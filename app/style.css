@@ -39,7 +39,8 @@ main { padding: 16px; max-width: 640px; margin: 0 auto; display: grid; gap: 14px
 .card.warn { background: #2a230f; border-color: #fbbf2455; }
 
 .picker { display: block; cursor: pointer; }
-.picker input { display: none; }
+/* visually hidden but still fires change reliably (iOS Safari quirk with display:none) */
+.picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .picker-inner {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 28px 16px; border: 2px dashed #ffffff33; border-radius: 14px;
