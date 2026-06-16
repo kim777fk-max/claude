@@ -1,0 +1,25 @@
+# Render Blueprint — deploy the auto-edit backend as a Docker web service.
+# Use: Render dashboard → New → Blueprint → pick this repo. Then fill the
+# secret env vars (marked sync:false) in the dashboard.
+services:
+  - type: web
+    name: video-edit-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: CLOUDINARY_CLOUD_NAME
+        value: dftjmz7l5
+      - key: CLOUDINARY_FOLDER
+        value: claude-edits
+      - key: EDIT_PLANNER_MODEL
+        value: claude-opus-4-8
+      - key: ALLOWED_ORIGINS
+        sync: false   # e.g. https://kim777fk-max.github.io
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

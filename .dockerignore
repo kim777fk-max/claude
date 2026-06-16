@@ -1,0 +1,11 @@
+.git
+**/node_modules
+server/.env
+.env
+media/in/*
+media/out/*
+app
+*.mp4
+*.mov
+*.mp3
+*.wav
