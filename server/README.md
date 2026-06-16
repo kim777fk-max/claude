@@ -68,6 +68,11 @@ gcloud run deploy video-edit-backend --source . --region asia-northeast1 \
 ```
 Cloud Run は `$PORT`（8080）を注入します。サーバーは `PORT` を尊重するのでそのまま動きます。
 
+## Discord 通知（任意）
+編集が完了したら **まるくん** が Discord に結果（再生リンク＋ダウンロードリンク）を投稿します。
+1. Discord: サーバー設定 → 連携サービス → ウェブフック → 新しいウェブフック → URLをコピー
+2. Render の env に `DISCORD_WEBHOOK_URL` を設定（未設定なら通知はスキップ）
+
 ## 注意
 - `ALLOWED_ORIGINS` は Pages のURL（例 `https://kim777fk-max.github.io`）を指定。`*` でも可。
 - このMVPには認証/レート制限がありません。公開運用するなら追加を検討してください
