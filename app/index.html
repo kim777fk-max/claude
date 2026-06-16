@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>動画編集アップローダー</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>🎬 動画編集アップローダー</h1>
+    <button id="settingsBtn" class="icon-btn" aria-label="設定">⚙️</button>
+  </header>
+
+  <main>
+    <!-- 設定が未完了のときの案内 -->
+    <section id="setupNotice" class="card warn hidden">
+      <p>最初に <b>Cloudinary の設定</b> が必要です（1回だけ）。右上の ⚙️ から
+        クラウド名と未署名アップロードプリセットを入力してください。</p>
+      <button id="openSetup" class="btn">設定を開く</button>
+    </section>
+
+    <!-- ステップ1: 選択 -->
+    <section class="card">
+      <h2>1. 動画を選ぶ</h2>
+      <label class="picker" id="pickerLabel">
+        <input id="file" type="file" accept="video/*,image/*" />
+        <span class="picker-inner">
+          <span class="picker-icon">＋</span>
+          <span>写真・動画を選択</span>
+          <small>スマホのライブラリ／カメラから</small>
+        </span>
+      </label>
+      <video id="preview" class="preview hidden" controls playsinline muted></video>
+      <div id="fileMeta" class="meta hidden"></div>
+    </section>
+
+    <!-- ステップ2: アップロード -->
+    <section class="card" id="uploadCard">
+      <h2>2. クラウドへアップロード</h2>
+      <button id="uploadBtn" class="btn primary" disabled>アップロード</button>
+      <div id="progressWrap" class="progress hidden">
+        <div id="progressBar" class="progress-bar"></div>
+        <span id="progressText">0%</span>
+      </div>
+      <div id="result" class="result hidden">
+        <div class="kv"><span>ファイル名</span><code id="rPublicId"></code></div>
+        <div class="kv"><span>URL</span><a id="rUrl" target="_blank" rel="noopener"></a></div>
+      </div>
+    </section>
+
+    <!-- ステップ3: プロンプト -->
+    <section class="card" id="promptCard">
+      <h2>3. やりたいことを書く</h2>
+      <div class="chips" id="chips">
+        <button type="button" data-t="この動画の 5秒〜20秒だけ切り出して。">✂️ カット</button>
+        <button type="button" data-t="この動画に「タイトル」というテロップを最初の3秒だけ大きく入れて。">💬 テロップ</button>
+        <button type="button" data-t="この動画にBGMを小さめの音量で足して、最後フェードアウトして。">🎵 BGM</button>
+        <button type="button" data-t="この動画と○○をつなげて1本にして。">🔗 結合</button>
+      </div>
+      <textarea id="prompt" rows="4" placeholder="例）5秒〜20秒を切り出して、最初に『オープニング』とテロップを入れて"></textarea>
+      <div class="actions">
+        <button id="copyBtn" class="btn primary" disabled>Claude用にコピー</button>
+        <button id="shareBtn" class="btn" disabled>共有</button>
+      </div>
+      <button id="autoBtn" class="btn primary hidden" disabled>⚡ 自動で編集する</button>
+      <div id="autoStatus" class="meta hidden"></div>
+      <div id="autoResult" class="result hidden">
+        <div class="kv"><span>編集後</span><a id="autoUrl" target="_blank" rel="noopener"></a></div>
+      </div>
+      <pre id="handoff" class="handoff hidden"></pre>
+    </section>
+
+    <p class="hint">コピー／共有した文章を <b>Claude Code</b> に貼り付けると、
+      カット・結合・テロップ・BGM追加を行い、編集後の動画リンクを返します。</p>
+  </main>
+
+  <!-- 設定ダイアログ -->
+  <dialog id="settings">
+    <form method="dialog" class="settings-form">
+      <h2>Cloudinary 設定</h2>
+      <label>クラウド名 (cloud name)
+        <input id="cfgCloud" type="text" placeholder="例: dftjmz7l5" autocapitalize="off" autocorrect="off" />
+      </label>
+      <label>未署名アップロードプリセット (unsigned upload preset)
+        <input id="cfgPreset" type="text" placeholder="例: claude_unsigned" autocapitalize="off" autocorrect="off" />
+      </label>
+      <label>保存先フォルダ（任意）
+        <input id="cfgFolder" type="text" placeholder="claude-edits" autocapitalize="off" autocorrect="off" />
+      </label>
+      <label>バックエンドURL（任意・自動編集用）
+        <input id="cfgBackend" type="url" placeholder="https://your-server.example.com" autocapitalize="off" autocorrect="off" />
+      </label>
+      <details class="help">
+        <summary>2つの使い方</summary>
+        <ul>
+          <li><b>プリセット方式（手軽）</b>：未署名プリセットを作り、ファイル名＋プロンプトをコピーして Claude に貼る。<br>
+            作り方：Cloudinary → Settings → Upload → Add upload preset → <b>Signing Mode = Unsigned</b>。</li>
+          <li><b>バックエンド方式（自動）</b>：上に server URL を入れると、プリセット不要の署名アップロード＋「自動で編集」ボタンが使えます（プロンプトから編集してリンクを返す）。</li>
+        </ul>
+      </details>
+      <div class="actions">
+        <button value="cancel" class="btn">閉じる</button>
+        <button id="saveCfg" value="save" class="btn primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

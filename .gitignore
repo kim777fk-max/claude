@@ -1,0 +1,27 @@
+# Don't commit actual media — keep the repo light. Folders are tracked via .gitkeep.
+media/in/*
+media/out/*
+!media/in/.gitkeep
+!media/out/.gitkeep
+
+# Common video/audio/temp files anywhere
+*.mp4
+*.mov
+*.m4v
+*.webm
+*.mkv
+*.avi
+*.mp3
+*.wav
+*.aac
+*.m4a
+*.png
+
+# App icons are part of the PWA — keep them despite the *.png rule above.
+!app/icons/
+!app/icons/*.png
+
+# Node backend
+node_modules/
+server/.env
+.env
