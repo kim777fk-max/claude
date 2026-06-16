@@ -29,15 +29,14 @@
     <section class="card">
       <h2>1. 動画を選ぶ</h2>
       <label class="picker" id="pickerLabel">
-        <input id="file" type="file" accept="video/*,image/*" />
+        <input id="file" type="file" accept="video/*,image/*" multiple />
         <span class="picker-inner">
           <span class="picker-icon">＋</span>
-          <span>写真・動画を選択</span>
-          <small>スマホのライブラリ／カメラから</small>
+          <span>写真・動画を選択（複数可）</span>
+          <small>スマホのライブラリからまとめて選べます</small>
         </span>
       </label>
-      <video id="preview" class="preview hidden" controls playsinline muted></video>
-      <div id="fileMeta" class="meta hidden"></div>
+      <ul id="fileList" class="filelist hidden"></ul>
     </section>
 
     <!-- ステップ2: アップロード -->
@@ -48,10 +47,7 @@
         <div id="progressBar" class="progress-bar"></div>
         <span id="progressText">0%</span>
       </div>
-      <div id="result" class="result hidden">
-        <div class="kv"><span>ファイル名</span><code id="rPublicId"></code></div>
-        <div class="kv"><span>URL</span><a id="rUrl" target="_blank" rel="noopener"></a></div>
-      </div>
+      <ul id="resultList" class="filelist hidden"></ul>
     </section>
 
     <!-- ステップ3: プロンプト -->
@@ -61,7 +57,7 @@
         <button type="button" data-t="この動画の 5秒〜20秒だけ切り出して。">✂️ カット</button>
         <button type="button" data-t="この動画に「タイトル」というテロップを最初の3秒だけ大きく入れて。">💬 テロップ</button>
         <button type="button" data-t="この動画にBGMを小さめの音量で足して、最後フェードアウトして。">🎵 BGM</button>
-        <button type="button" data-t="この動画と○○をつなげて1本にして。">🔗 結合</button>
+        <button type="button" data-t="選んだ動画を順番に1本につなげて。">🔗 結合（全部つなぐ）</button>
       </div>
       <textarea id="prompt" rows="4" placeholder="例）5秒〜20秒を切り出して、最初に『オープニング』とテロップを入れて"></textarea>
       <div class="actions">

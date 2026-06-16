@@ -82,15 +82,22 @@ const EDIT_PLAN_TOOL = {
 const SYSTEM = `You are a video-editing planner. Convert the user's request into a concrete
 sequence of edit operations using the build_edit_plan tool. Rules:
 - Use only cut, telop, music, concat.
+- The first clip is the primary video; operations apply to it in sequence.
+- When several clips are provided and the user wants to join/merge them, emit a
+  single "concat" op whose "inputs" are the OTHER clip URLs (2nd, 3rd, ...) in order.
+  Put concat first if later ops (telop/music/cut) should apply to the joined result.
 - "music" requires a music_url. If the user didn't provide one, omit the music op and explain in note.
 - Pick sensible defaults for unspecified values; mention assumptions in note.
 - Always call the tool exactly once.`;
 
-export async function buildEditPlan({ prompt, sourceUrl }) {
+export async function buildEditPlan({ prompt, sourceUrl, extraUrls = [] }) {
   const client = new Anthropic(); // reads ANTHROPIC_API_KEY
-  const userText =
-    `Source video URL: ${sourceUrl}\n\n` +
-    `Editing request:\n${prompt}`;
+  let userText = `Primary video URL: ${sourceUrl}\n`;
+  if (extraUrls.length) {
+    userText += `Additional clips (in order):\n` +
+      extraUrls.map((u, i) => `  ${i + 2}. ${u}`).join('\n') + '\n';
+  }
+  userText += `\nEditing request:\n${prompt}`;
 
   const resp = await client.messages.create({
     model: MODEL,

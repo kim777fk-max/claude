@@ -1,6 +1,6 @@
 // Minimal service worker so the page is installable ("Add to Home Screen")
 // and the app shell works offline. Uploads always go to the network.
-const CACHE = 'video-uploader-v2';
+const CACHE = 'video-uploader-v3';
 const SHELL = [
   './',
   './index.html',

@@ -3,16 +3,25 @@
 const $ = (id) => document.getElementById(id);
 const LS_KEY = 'cloudinaryCfg';
 
-// ---- config (persisted in localStorage) ----
+// Pre-embedded defaults so the app works with zero setup. Settings can override.
+const DEFAULTS = {
+  cloud: 'dftjmz7l5',
+  preset: '',
+  folder: 'claude-edits',
+  backend: 'https://video-edit-backend.onrender.com',
+};
+
+// ---- config (defaults + persisted overrides) ----
 function loadCfg() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
-  catch { return {}; }
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch {}
+  return { ...DEFAULTS, ...stored };
 }
 function saveCfg(cfg) { localStorage.setItem(LS_KEY, JSON.stringify(cfg)); }
 let cfg = loadCfg();
 
-// Ready if we can upload: either an unsigned preset, or a backend that signs.
-function cfgReady() { return (cfg.cloud && cfg.preset) || cfg.backend; }
+// Ready if we can upload: a backend that signs, or an unsigned preset.
+function cfgReady() { return !!cfg.backend || (cfg.cloud && cfg.preset); }
 function refreshSetupNotice() {
   $('setupNotice').classList.toggle('hidden', cfgReady());
 }
@@ -42,95 +51,119 @@ $('settings').addEventListener('close', () => {
   }
 });
 
-// ---- file selection ----
-let selectedFile = null;
-let uploaded = null; // { public_id, secure_url }
+// ---- file selection (multiple) ----
+let selectedFiles = [];   // File[]
+let uploaded = [];        // { public_id, secure_url, name }[]
 
 $('file').addEventListener('change', (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
-  selectedFile = f;
-  uploaded = null;
-
-  const url = URL.createObjectURL(f);
-  const v = $('preview');
-  if (f.type.startsWith('video/')) {
-    v.src = url; v.classList.remove('hidden');
-  } else {
-    v.classList.add('hidden');
-  }
-  $('fileMeta').textContent = `${f.name} ・ ${(f.size / 1024 / 1024).toFixed(1)} MB`;
-  $('fileMeta').classList.remove('hidden');
-
-  $('uploadBtn').disabled = false;
-  $('result').classList.add('hidden');
+  selectedFiles = Array.from(e.target.files || []);
+  uploaded = [];
+  renderSelected();
+  $('resultList').classList.add('hidden');
+  $('resultList').innerHTML = '';
   $('progressWrap').classList.add('hidden');
   $('autoStatus').classList.add('hidden');
   $('autoResult').classList.add('hidden');
+  $('uploadBtn').disabled = selectedFiles.length === 0;
+  $('uploadBtn').textContent = selectedFiles.length > 1
+    ? `アップロード（${selectedFiles.length}本）` : 'アップロード';
   updateHandoffEnabled();
   updateAutoEnabled();
 });
 
-// ---- upload to Cloudinary (signed via backend, or unsigned via preset) ----
+function fmtSize(b) { return (b / 1024 / 1024).toFixed(1) + ' MB'; }
+
+function renderSelected() {
+  const ul = $('fileList');
+  ul.innerHTML = '';
+  selectedFiles.forEach((f, i) => {
+    const li = document.createElement('li');
+    li.id = `sel_${i}`;
+    li.innerHTML =
+      `<span class="fl-name">${i + 1}. ${escapeHtml(f.name)}</span>` +
+      `<span class="fl-sub">${fmtSize(f.size)}</span>` +
+      `<span class="fl-bar"><i></i></span>`;
+    ul.appendChild(li);
+  });
+  ul.classList.toggle('hidden', selectedFiles.length === 0);
+}
+
+function setFileProgress(i, pct, done) {
+  const li = $(`sel_${i}`);
+  if (!li) return;
+  const bar = li.querySelector('.fl-bar > i');
+  if (bar) bar.style.width = pct + '%';
+  if (done) li.classList.add('done');
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// ---- upload all selected files ----
 $('uploadBtn').addEventListener('click', async () => {
-  if (!selectedFile) return;
+  if (selectedFiles.length === 0) return;
   if (!cfgReady()) { openSettings(); return; }
   $('uploadBtn').disabled = true;
   $('progressWrap').classList.remove('hidden');
   setProgress(0);
-  try {
-    const fd = new FormData();
-    fd.append('file', selectedFile);
-    let cloud = cfg.cloud;
 
+  try {
+    // Signed mode: fetch one signature and reuse it for the whole batch.
+    let signed = null, cloud = cfg.cloud;
     if (cfg.backend) {
-      // signed upload — backend returns a signature; no preset needed
-      const sign = await fetch(cfg.backend + '/api/sign', { method: 'POST' }).then((r) => {
+      signed = await fetch(cfg.backend + '/api/sign', { method: 'POST' }).then((r) => {
         if (!r.ok) throw new Error('sign failed (' + r.status + ')');
         return r.json();
       });
-      cloud = sign.cloudName;
-      fd.append('api_key', sign.apiKey);
-      fd.append('timestamp', sign.timestamp);
-      fd.append('signature', sign.signature);
-      if (sign.folder) fd.append('folder', sign.folder);
-    } else {
-      // unsigned upload via preset
-      fd.append('upload_preset', cfg.preset);
-      if (cfg.folder) fd.append('folder', cfg.folder);
+      cloud = signed.cloudName;
     }
 
-    const res = await uploadXHR(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud)}/auto/upload`, fd);
-    uploaded = { public_id: res.public_id, secure_url: res.secure_url };
-    setProgress(100);
-    $('rPublicId').textContent = res.public_id;
-    const a = $('rUrl');
-    a.href = res.secure_url; a.textContent = res.secure_url;
-    $('result').classList.remove('hidden');
+    uploaded = [];
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const f = selectedFiles[i];
+      $('progressText').textContent = `${i + 1}/${selectedFiles.length}`;
+      const fd = new FormData();
+      fd.append('file', f);
+      if (signed) {
+        fd.append('api_key', signed.apiKey);
+        fd.append('timestamp', signed.timestamp);
+        fd.append('signature', signed.signature);
+        if (signed.folder) fd.append('folder', signed.folder);
+      } else {
+        fd.append('upload_preset', cfg.preset);
+        if (cfg.folder) fd.append('folder', cfg.folder);
+      }
+      const res = await uploadOne(
+        `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud)}/auto/upload`, fd, i);
+      uploaded.push({ public_id: res.public_id, secure_url: res.secure_url, name: f.name });
+      setFileProgress(i, 100, true);
+      setProgress(Math.round(((i + 1) / selectedFiles.length) * 100));
+    }
+
+    renderResults();
     updateHandoffEnabled();
     updateAutoEnabled();
     buildHandoff();
-    toast('アップロード完了');
+    toast(uploaded.length > 1 ? `${uploaded.length}本アップロード完了` : 'アップロード完了');
   } catch (err) {
-    $('progressWrap').classList.add('hidden');
     toast('アップロード失敗: ' + (err.message || err));
   } finally {
     $('uploadBtn').disabled = false;
   }
 });
 
-// XHR upload with progress, resolved as parsed JSON.
-function uploadXHR(endpoint, fd) {
+// One file upload with per-file progress; resolves parsed JSON.
+function uploadOne(endpoint, fd, i) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', endpoint);
     xhr.upload.onprogress = (ev) => {
-      if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
+      if (ev.lengthComputable) setFileProgress(i, Math.round((ev.loaded / ev.total) * 100), false);
     };
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText));
-      } else {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+      else {
         let msg = 'エラー (' + xhr.status + ')';
         try { msg = JSON.parse(xhr.responseText).error.message; } catch {}
         reject(new Error(msg));
@@ -141,26 +174,107 @@ function uploadXHR(endpoint, fd) {
   });
 }
 
-// ---- auto edit via backend ----
+function setProgress(p) {
+  $('progressBar').style.width = p + '%';
+}
+
+function renderResults() {
+  const ul = $('resultList');
+  ul.innerHTML = '';
+  uploaded.forEach((u, i) => {
+    const li = document.createElement('li');
+    li.className = 'done';
+    li.innerHTML =
+      `<span class="fl-name">${i + 1}. ${escapeHtml(u.public_id)}</span>` +
+      `<a href="${u.secure_url}" target="_blank" rel="noopener">${u.secure_url}</a>`;
+    ul.appendChild(li);
+  });
+  ul.classList.toggle('hidden', uploaded.length === 0);
+}
+
+// ---- prompt + handoff text ----
+$('chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-t]');
+  if (!btn) return;
+  const ta = $('prompt');
+  ta.value = (ta.value ? ta.value.trim() + '\n' : '') + btn.dataset.t;
+  ta.focus();
+  buildHandoff();
+});
+$('prompt').addEventListener('input', buildHandoff);
+
+function updateHandoffEnabled() {
+  const ok = uploaded.length > 0;
+  $('copyBtn').disabled = !ok;
+  $('shareBtn').disabled = !ok;
+}
+
+function handoffText() {
+  if (uploaded.length === 0) return '';
+  const p = $('prompt').value.trim() || '(編集内容を記入してください)';
+  const lines = ['Cloudinary の動画を編集してください。'];
+  if (uploaded.length === 1) {
+    lines.push(`ファイル名: ${uploaded[0].public_id}`);
+    lines.push(`URL: ${uploaded[0].secure_url}`);
+  } else {
+    lines.push(`ファイル(${uploaded.length}本・順番どおり):`);
+    uploaded.forEach((u, i) => lines.push(`${i + 1}. ${u.public_id} — ${u.secure_url}`));
+  }
+  lines.push(`やりたいこと: ${p}`);
+  lines.push('');
+  lines.push('編集後はCloudinaryにアップロードして、共有リンクを返してください。');
+  return lines.join('\n');
+}
+function buildHandoff() {
+  if (uploaded.length === 0) return;
+  $('handoff').textContent = handoffText();
+  $('handoff').classList.remove('hidden');
+}
+
+$('copyBtn').addEventListener('click', async () => {
+  const t = handoffText();
+  try {
+    await navigator.clipboard.writeText(t);
+    toast('コピーしました。Claudeに貼り付けてください');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    toast('コピーしました');
+  }
+});
+
+$('shareBtn').addEventListener('click', async () => {
+  const t = handoffText();
+  if (navigator.share) {
+    try { await navigator.share({ title: '動画編集の依頼', text: t }); } catch {}
+  } else {
+    await navigator.clipboard.writeText(t);
+    toast('共有非対応のためコピーしました');
+  }
+});
+
+// ---- auto edit via backend (passes all uploaded clips) ----
 function updateAutoEnabled() {
-  const ok = !!uploaded && !!cfg.backend;
+  const ok = uploaded.length > 0 && !!cfg.backend;
   $('autoBtn').classList.toggle('hidden', !cfg.backend);
   $('autoBtn').disabled = !ok;
 }
 
 $('autoBtn').addEventListener('click', async () => {
-  if (!uploaded || !cfg.backend) return;
+  if (uploaded.length === 0 || !cfg.backend) return;
   const prompt = $('prompt').value.trim();
   if (!prompt) { toast('やりたいことを書いてください'); return; }
   $('autoBtn').disabled = true;
   $('autoStatus').classList.remove('hidden');
-  $('autoStatus').textContent = '編集中… (動画の長さによって時間がかかります)';
+  $('autoStatus').textContent = '編集中… (動画の長さ・本数によって時間がかかります)';
   $('autoResult').classList.add('hidden');
   try {
+    const urls = uploaded.map((u) => u.secure_url);
     const res = await fetch(cfg.backend + '/api/edit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: uploaded.secure_url, prompt }),
+      body: JSON.stringify({ url: urls[0], urls, prompt }),
     }).then((r) => r.json());
     if (!res.ok) throw new Error(res.error || 'failed');
     if (res.skipped) {
@@ -179,72 +293,6 @@ $('autoBtn').addEventListener('click', async () => {
   }
 });
 
-function setProgress(p) {
-  $('progressBar').style.width = p + '%';
-  $('progressText').textContent = p + '%';
-}
-
-// ---- prompt + handoff text ----
-$('chips').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-t]');
-  if (!btn) return;
-  const ta = $('prompt');
-  ta.value = (ta.value ? ta.value.trim() + '\n' : '') + btn.dataset.t;
-  ta.focus();
-  buildHandoff();
-});
-$('prompt').addEventListener('input', buildHandoff);
-
-function updateHandoffEnabled() {
-  const ok = !!uploaded;
-  $('copyBtn').disabled = !ok;
-  $('shareBtn').disabled = !ok;
-}
-
-function handoffText() {
-  if (!uploaded) return '';
-  const p = $('prompt').value.trim() || '(編集内容を記入してください)';
-  return [
-    'Cloudinary の動画を編集してください。',
-    `ファイル名: ${uploaded.public_id}`,
-    `URL: ${uploaded.secure_url}`,
-    `やりたいこと: ${p}`,
-    '',
-    '編集後はCloudinaryにアップロードして、共有リンクを返してください。',
-  ].join('\n');
-}
-function buildHandoff() {
-  if (!uploaded) return;
-  const t = handoffText();
-  $('handoff').textContent = t;
-  $('handoff').classList.remove('hidden');
-}
-
-$('copyBtn').addEventListener('click', async () => {
-  const t = handoffText();
-  try {
-    await navigator.clipboard.writeText(t);
-    toast('コピーしました。Claudeに貼り付けてください');
-  } catch {
-    // fallback
-    const ta = document.createElement('textarea');
-    ta.value = t; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); ta.remove();
-    toast('コピーしました');
-  }
-});
-
-$('shareBtn').addEventListener('click', async () => {
-  const t = handoffText();
-  if (navigator.share) {
-    try { await navigator.share({ title: '動画編集の依頼', text: t }); }
-    catch {}
-  } else {
-    await navigator.clipboard.writeText(t);
-    toast('共有非対応のためコピーしました');
-  }
-});
-
 // ---- toast ----
 let toastTimer = null;
 function toast(msg) {
@@ -255,7 +303,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.remove(), 2600);
 }
 
-// ---- service worker (installable PWA) ----
+// ---- service worker ----
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

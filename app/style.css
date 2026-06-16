@@ -51,6 +51,18 @@ main { padding: 16px; max-width: 640px; margin: 0 auto; display: grid; gap: 14px
 .preview { width: 100%; border-radius: 12px; margin-top: 12px; background: #000; max-height: 50dvh; }
 .meta { margin-top: 10px; color: var(--muted); font-size: 13px; }
 
+.filelist { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.filelist li {
+  background: var(--card2); border: 1px solid #ffffff14; border-radius: 10px;
+  padding: 10px 12px; font-size: 13px; display: grid; gap: 4px;
+}
+.filelist li .fl-name { color: var(--fg); word-break: break-all; }
+.filelist li .fl-sub { color: var(--muted); font-size: 12px; word-break: break-all; }
+.filelist li a { color: var(--accent); word-break: break-all; }
+.filelist li .fl-bar { height: 5px; border-radius: 4px; background: #ffffff14; overflow: hidden; }
+.filelist li .fl-bar > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .15s; }
+.filelist li.done { border-color: #34d39955; }
+
 .btn {
   appearance: none; border: 1px solid #ffffff22; background: var(--card2);
   color: var(--fg); padding: 12px 16px; border-radius: 12px; font-size: 15px;
