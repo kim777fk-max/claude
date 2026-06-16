@@ -23,3 +23,5 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false   # optional: notify results to a Discord channel

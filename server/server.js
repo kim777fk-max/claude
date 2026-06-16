@@ -53,6 +53,34 @@ function pruneJobs() {
   for (const [id, j] of jobs) if (j.createdAt < cutoff) jobs.delete(id);
 }
 
+// Post the result to Discord (if a webhook is configured) as "まるくん".
+async function notifyDiscord(job) {
+  const hook = process.env.DISCORD_WEBHOOK_URL;
+  if (!hook) return;
+  let content;
+  if (job.status === "done" && !job.skipped) {
+    const dl = (job.secure_url || "").replace("/upload/", "/upload/fl_attachment/");
+    content =
+      `✅ 編集が完了したよ！\n` +
+      (job.note ? job.note + "\n" : "") +
+      `▶ 再生/共有: ${job.secure_url}\n` +
+      `⬇ ダウンロード: ${dl}`;
+  } else if (job.status === "done" && job.skipped) {
+    content = `🟡 編集なし: ${job.note || ""}`;
+  } else {
+    content = `❌ 編集に失敗: ${job.error || "unknown"}`;
+  }
+  try {
+    await fetch(hook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "まるくん", content }),
+    });
+  } catch (e) {
+    console.error("discord notify failed:", e);
+  }
+}
+
 app.post("/api/edit", (req, res) => {
   const { url, urls, prompt } = req.body || {};
   const allUrls = Array.isArray(urls) && urls.length ? urls : (url ? [url] : []);
@@ -81,6 +109,7 @@ app.post("/api/edit", (req, res) => {
       job.status = "error";
       job.error = String(err.message || err);
     }
+    await notifyDiscord(job);
   });
 
   res.status(202).json({ ok: true, jobId, status: "queued" });
