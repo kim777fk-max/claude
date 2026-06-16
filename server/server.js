@@ -54,15 +54,19 @@ function pruneJobs() {
 }
 
 // Post the result to Discord (if a webhook is configured) as "まるくん".
+const APP_BASE_URL = (process.env.APP_BASE_URL || "https://kim777fk-max.github.io/claude").replace(/\/$/, "");
+
 async function notifyDiscord(job) {
   const hook = process.env.DISCORD_WEBHOOK_URL;
   if (!hook) return;
   let content;
   if (job.status === "done" && !job.skipped) {
     const dl = (job.secure_url || "").replace("/upload/", "/upload/fl_attachment/");
+    const savePage = `${APP_BASE_URL}/save.html?u=${encodeURIComponent(job.secure_url || "")}`;
     content =
       `✅ 編集が完了したよ！\n` +
       (job.note ? job.note + "\n" : "") +
+      `📥 写真に保存: ${savePage}\n` +
       `▶ 再生/共有: ${job.secure_url}\n` +
       `⬇ ダウンロード: ${dl}`;
   } else if (job.status === "done" && job.skipped) {

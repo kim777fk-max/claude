@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>動画を保存</title>
+  <style>
+    :root{--bg:#0b1020;--card:#151b2e;--fg:#eaf0ff;--muted:#9aa6c7;--accent:#6ea8fe;--accent2:#8b5cf6;--ok:#34d399}
+    *{box-sizing:border-box}html,body{margin:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+      background:radial-gradient(120% 80% at 50% 0%,#16203c 0%,var(--bg) 60%);color:var(--fg);
+      min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:18px}
+    .card{background:var(--card);border:1px solid #ffffff14;border-radius:18px;padding:20px;width:min(560px,100%);text-align:center}
+    h1{font-size:18px;margin:0 0 14px}
+    video{width:100%;border-radius:12px;background:#000;max-height:55dvh;margin-bottom:14px}
+    .btn{appearance:none;border:0;border-radius:12px;padding:15px 16px;font-size:16px;font-weight:700;width:100%;
+      color:#08122b;background:linear-gradient(135deg,var(--accent),var(--accent2));margin-bottom:10px}
+    a.btn{display:block;text-decoration:none;color:#08122b}
+    a.alt{background:#1d2540;color:var(--fg);border:1px solid #ffffff22}
+    .msg{color:var(--muted);font-size:13px;min-height:18px;margin-top:6px}
+    .hint{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.6}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>📥 動画を写真に保存</h1>
+    <video id="v" controls playsinline></video>
+    <button id="save" class="btn">📥 写真に保存 / 共有</button>
+    <a id="dl" class="btn alt" target="_blank" rel="noopener">⬇ ダウンロード</a>
+    <div id="msg" class="msg"></div>
+    <p class="hint">「写真に保存」→ 共有シートの <b>「ビデオを保存」</b> で写真アプリに入ります。
+      出ない場合は「ダウンロード」→ ファイルAppから共有→ビデオを保存。</p>
+  </div>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const url = q.get('u') || '';
+    const msg = (t) => { document.getElementById('msg').textContent = t || ''; };
+    const dlUrl = (u) => u.replace('/upload/', '/upload/fl_attachment/');
+    if (url) {
+      document.getElementById('v').src = url;
+      document.getElementById('dl').href = dlUrl(url);
+    } else {
+      msg('動画URLが指定されていません（?u=... が必要）');
+    }
+    document.getElementById('save').addEventListener('click', async () => {
+      if (!url) return;
+      const btn = document.getElementById('save');
+      btn.disabled = true; const prev = btn.textContent; btn.textContent = '動画を取得中…';
+      try {
+        const blob = await fetch(url).then((r) => { if (!r.ok) throw new Error('取得失敗 ' + r.status); return r.blob(); });
+        const file = new File([blob], 'video.mp4', { type: 'video/mp4' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: '動画' });
+          msg('共有シートから「ビデオを保存」を選んでください');
+        } else {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = 'video.mp4';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+          msg('ダウンロードしました（共有→ビデオを保存で写真へ）');
+        }
+      } catch (e) {
+        if (!(e && e.name === 'AbortError')) msg('失敗: ' + (e.message || e));
+      } finally { btn.disabled = false; btn.textContent = prev; }
+    });
+  </script>
+</body>
+</html>
