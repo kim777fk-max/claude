@@ -59,6 +59,7 @@ $('file').addEventListener('change', (e) => {
   selectedFiles = Array.from(e.target.files || []);
   uploaded = [];
   renderSelected();
+  if (typeof showUploadMsg === 'function') showUploadMsg('');
   $('resultList').classList.add('hidden');
   $('resultList').innerHTML = '';
   $('progressWrap').classList.add('hidden');
@@ -100,28 +101,48 @@ function escapeHtml(s) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// persistent status/error line under the upload button (so it's never "no reaction")
+function showUploadMsg(text, isError) {
+  const el = $('uploadMsg');
+  el.textContent = text;
+  el.style.color = isError ? '#fbbf24' : 'var(--muted)';
+  el.classList.toggle('hidden', !text);
+}
+
 // ---- upload all selected files ----
 $('uploadBtn').addEventListener('click', async () => {
-  if (selectedFiles.length === 0) return;
+  // Re-read straight from the input in case the change event never populated state.
+  if (selectedFiles.length === 0) {
+    const live = Array.from($('file').files || []);
+    if (live.length) { selectedFiles = live; renderSelected(); }
+  }
+  if (selectedFiles.length === 0) { showUploadMsg('先に動画を選択してください。', true); return; }
   if (!cfgReady()) { openSettings(); return; }
   $('uploadBtn').disabled = true;
   $('progressWrap').classList.remove('hidden');
   setProgress(0);
+  showUploadMsg('アップロード準備中…');
 
   try {
     // Signed mode: fetch one signature and reuse it for the whole batch.
     let signed = null, cloud = cfg.cloud;
     if (cfg.backend) {
-      signed = await fetch(cfg.backend + '/api/sign', { method: 'POST' }).then((r) => {
-        if (!r.ok) throw new Error('sign failed (' + r.status + ')');
-        return r.json();
-      });
+      showUploadMsg('サーバーに接続中…（無料枠は初回起動に最大1分）');
+      let r;
+      try {
+        r = await fetch(cfg.backend + '/api/sign', { method: 'POST' });
+      } catch (e) {
+        throw new Error('サーバーに接続できません（CORS/ネットワーク）: ' + (e.message || e));
+      }
+      if (!r.ok) throw new Error('署名取得に失敗 (HTTP ' + r.status + ')');
+      signed = await r.json();
       cloud = signed.cloudName;
     }
 
     uploaded = [];
     for (let i = 0; i < selectedFiles.length; i++) {
       const f = selectedFiles[i];
+      showUploadMsg(`アップロード中… ${i + 1}/${selectedFiles.length}（${f.name}）`);
       $('progressText').textContent = `${i + 1}/${selectedFiles.length}`;
       const fd = new FormData();
       fd.append('file', f);
@@ -145,9 +166,12 @@ $('uploadBtn').addEventListener('click', async () => {
     updateHandoffEnabled();
     updateAutoEnabled();
     buildHandoff();
+    showUploadMsg('');
     toast(uploaded.length > 1 ? `${uploaded.length}本アップロード完了` : 'アップロード完了');
   } catch (err) {
-    toast('アップロード失敗: ' + (err.message || err));
+    const msg = (err && err.message) ? err.message : String(err);
+    showUploadMsg('アップロード失敗: ' + msg, true);
+    toast('アップロード失敗');
   } finally {
     $('uploadBtn').disabled = false;
   }

@@ -1,6 +1,7 @@
-// Minimal service worker so the page is installable ("Add to Home Screen")
-// and the app shell works offline. Uploads always go to the network.
-const CACHE = 'video-uploader-v3';
+// Service worker: installable PWA + reliable updates.
+// App assets use NETWORK-FIRST so the newest code reaches the device when online
+// (cache-first previously could serve stale app.js). Falls back to cache offline.
+const CACHE = 'video-uploader-v4';
 const SHELL = [
   './',
   './index.html',
@@ -25,10 +26,18 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // never cache uploads / API calls
-  if (url.hostname.endsWith('api.cloudinary.com')) return;
   if (e.request.method !== 'GET') return;
+  if (url.hostname.endsWith('api.cloudinary.com')) return; // never cache uploads
+  if (url.origin !== self.location.origin) return;          // let cross-origin pass through
+
+  // Network-first for our own assets; update cache; fall back to cache offline.
   e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request))
+    fetch(e.request)
+      .then((resp) => {
+        const copy = resp.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        return resp;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
