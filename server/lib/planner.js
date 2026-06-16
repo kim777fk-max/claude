@@ -51,6 +51,14 @@ const EDIT_PLAN_TOOL = {
               enum: ["mix", "replace"],
               description: "For music: mix keeps original audio (default), replace swaps it.",
             },
+            music_volume: {
+              type: "number",
+              description: "For music: BGM volume from 0 to 1 (e.g. 0.2 = quiet, 0.5 = medium). Default 0.25.",
+            },
+            fade_seconds: {
+              type: "number",
+              description: "For music: fade-out length in seconds at the end of the video (0 = no fade). Default 2.",
+            },
             inputs: {
               type: "array",
               items: { type: "string" },
