@@ -1,0 +1,17 @@
+# Don't commit actual media — keep the repo light. Folders are tracked via .gitkeep.
+media/in/*
+media/out/*
+!media/in/.gitkeep
+!media/out/.gitkeep
+
+# Common video/audio/temp files anywhere
+*.mp4
+*.mov
+*.m4v
+*.webm
+*.mkv
+*.avi
+*.mp3
+*.wav
+*.aac
+*.m4a
