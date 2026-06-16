@@ -4,7 +4,7 @@
 // is safe to hand to runPlan.js.
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = process.env.EDIT_PLANNER_MODEL || "claude-opus-4-8";
+const MODEL = process.env.EDIT_PLANNER_MODEL || "claude-haiku-4-5";
 
 const EDIT_PLAN_TOOL = {
   name: "build_edit_plan",

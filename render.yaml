@@ -14,7 +14,7 @@ services:
       - key: CLOUDINARY_FOLDER
         value: claude-edits
       - key: EDIT_PLANNER_MODEL
-        value: claude-opus-4-8
+        value: claude-haiku-4-5
       - key: ALLOWED_ORIGINS
         sync: false   # e.g. https://kim777fk-max.github.io
       - key: CLOUDINARY_API_KEY
