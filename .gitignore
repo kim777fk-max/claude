@@ -15,3 +15,8 @@ media/out/*
 *.wav
 *.aac
 *.m4a
+*.png
+
+# App icons are part of the PWA — keep them despite the *.png rule above.
+!app/icons/
+!app/icons/*.png

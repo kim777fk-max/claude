@@ -45,6 +45,48 @@ scripts/cloud.sh datauri media/out/clip.mp4 > /tmp/clip.datauri
 
 ---
 
+## 📲 スマホアプリ（アップローダー）`app/`
+
+「アプリを開く → 写真/動画を選ぶ → クラウドへアップ → ファイル名とプロンプトが出る」を
+そのまま形にした **インストール可能なWebアプリ（PWA）** です。バックエンド不要。
+
+### できること
+1. アプリを開く（ホーム画面に追加すればアプリのように起動）
+2. スマホのライブラリ／カメラから動画を選択
+3. Cloudinary へ直接アップロード（進捗バー付き）
+4. **アップしたファイル名 + URL + プロンプト欄**が表示される
+5. 「Claude用にコピー」または「共有」→ Claude Code に貼り付けるだけ
+
+### 公開方法（GitHub Pages 例）
+`app/` を GitHub Pages で配信すれば、スマホのブラウザで開けます。
+（Settings → Pages → Branch を選び `/app` を公開、など）
+ローカル確認は `python3 -m http.server -d app 8080` → `http://localhost:8080`。
+
+### 初回設定（1回だけ）
+アプリ右上の ⚙️ で以下を入力：
+- **クラウド名 (cloud name)** … 例 `dftjmz7l5`
+- **未署名アップロードプリセット** … Cloudinary コンソール → Settings → Upload →
+  Upload presets → Add upload preset → **Signing Mode = Unsigned** で作成した名前
+- 保存先フォルダ（任意, 既定 `claude-edits`）
+
+> 未署名プリセットを使うことで、APIシークレットをアプリに置かずに安全にアップロードできます。
+
+### アプリからの受け渡し文（自動生成）
+```
+Cloudinary の動画を編集してください。
+ファイル名: <public_id>
+URL: <secure_url>
+やりたいこと: <あなたのプロンプト>
+
+編集後はCloudinaryにアップロードして、共有リンクを返してください。
+```
+これを Claude Code に貼ると、ツールが URL から動画を取得して編集し、結果リンクを返します。
+
+> 補足: アプリから Claude Code を直接起動する公式APIは無いため、受け渡しは
+> ワンタップのコピー／共有にしています。
+
+---
+
 ## 使い方（自分でコマンドを叩く場合）
 
 ```bash
