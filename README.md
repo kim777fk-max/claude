@@ -22,6 +22,27 @@
 > 仕組み上、添付ファイルはセッションの作業フォルダに入ります。Claude がそれを
 > `media/in/` に置いて処理し、結果を `media/out/` に書き出して返します。
 
+### 📦 大きい動画でチャット添付できないとき（Cloudinary 経由）
+
+スマホの動画はサイズが大きく、チャットに直接添付できないことがあります。その場合は
+**Cloudinary（このセッションに連携済み）** を経由すれば上限を回避できます。
+
+1. 動画を Cloudinary にアップロード（アプリ / Web / 共有から）
+2. Claude に「Cloudinary の○○を編集して」と伝える（URL を貼ってもOK）
+3. Claude が **URL から直接ダウンロードして編集** → 結果を Cloudinary に戻し、
+   **共有リンク（secure_url）で返します**
+
+```bash
+# 入力は URL を直接渡せる（ffmpeg がストリーム取得）
+scripts/cut.sh "https://res.cloudinary.com/<cloud>/video/upload/.../in.mp4" 5 +10 media/out/clip.mp4
+
+# 出力を Cloudinary へ戻す準備（約47MBまで）。生成した data URI を
+# upload-asset MCP ツールの file に渡すと公開URLが返る
+scripts/cloud.sh datauri media/out/clip.mp4 > /tmp/clip.datauri
+```
+
+> 動作確認済み: Cloudinary URL の取得 → ffmpeg で編集 → アップロードして公開URL取得、まで往復成功。
+
 ---
 
 ## 使い方（自分でコマンドを叩く場合）
