@@ -291,31 +291,56 @@ $('autoBtn').addEventListener('click', async () => {
   if (!prompt) { toast('やりたいことを書いてください'); return; }
   $('autoBtn').disabled = true;
   $('autoStatus').classList.remove('hidden');
-  $('autoStatus').textContent = '編集中… (動画の長さ・本数によって時間がかかります)';
+  $('autoStatus').textContent = '依頼を送信中…';
   $('autoResult').classList.add('hidden');
   try {
     const urls = uploaded.map((u) => u.secure_url);
-    const res = await fetch(cfg.backend + '/api/edit', {
+    const start = await fetch(cfg.backend + '/api/edit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: urls[0], urls, prompt }),
     }).then((r) => r.json());
-    if (!res.ok) throw new Error(res.error || 'failed');
-    if (res.skipped) {
-      $('autoStatus').textContent = '編集なし: ' + (res.note || '');
-    } else {
-      $('autoStatus').textContent = res.note || '完了';
-      const a = $('autoUrl');
-      a.href = res.secure_url; a.textContent = res.secure_url;
-      $('autoResult').classList.remove('hidden');
-      toast('編集が完了しました');
+
+    // Back-compat: old sync backend returns the result directly.
+    if (start.secure_url || start.skipped) {
+      return showAutoResult(start);
     }
+    if (!start.ok || !start.jobId) throw new Error(start.error || 'failed to start');
+
+    // Poll the job until done/error (handles long videos without timeouts).
+    const deadline = Date.now() + 15 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 3000));
+      let job;
+      try {
+        job = await fetch(cfg.backend + '/api/job/' + start.jobId).then((r) => r.json());
+      } catch { continue; } // transient (e.g. cold start) — keep polling
+      if (job.status === 'queued' || job.status === 'running') {
+        $('autoStatus').textContent = '編集中…（動画の長さ・本数で時間がかかります）';
+        continue;
+      }
+      if (job.status === 'error') throw new Error(job.error || 'edit failed');
+      return showAutoResult(job); // done
+    }
+    throw new Error('時間切れ（処理に時間がかかっています。少し待って再試行してください）');
   } catch (err) {
     $('autoStatus').textContent = '失敗: ' + (err.message || err);
   } finally {
     $('autoBtn').disabled = false;
   }
 });
+
+function showAutoResult(res) {
+  if (res.skipped) {
+    $('autoStatus').textContent = '編集なし: ' + (res.note || '');
+    return;
+  }
+  $('autoStatus').textContent = res.note || '完了';
+  const a = $('autoUrl');
+  a.href = res.secure_url; a.textContent = res.secure_url;
+  $('autoResult').classList.remove('hidden');
+  toast('編集が完了しました');
+}
 
 // ---- toast ----
 let toastTimer = null;
