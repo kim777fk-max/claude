@@ -330,17 +330,55 @@ $('autoBtn').addEventListener('click', async () => {
   }
 });
 
+let lastResultUrl = null;
+
+function dlUrl(u) { return (u || '').replace('/upload/', '/upload/fl_attachment/'); }
+
 function showAutoResult(res) {
   if (res.skipped) {
     $('autoStatus').textContent = '編集なし: ' + (res.note || '');
     return;
   }
   $('autoStatus').textContent = res.note || '完了';
+  lastResultUrl = res.secure_url;
   const a = $('autoUrl');
   a.href = res.secure_url; a.textContent = res.secure_url;
+  $('dlLink').href = dlUrl(res.secure_url);
   $('autoResult').classList.remove('hidden');
   toast('編集が完了しました');
 }
+
+// Save the finished video to the device. On iOS this opens the share sheet
+// (→「ビデオを保存」saves to Photos). Falls back to a normal download.
+$('saveBtn').addEventListener('click', async () => {
+  if (!lastResultUrl) return;
+  $('saveBtn').disabled = true;
+  const prev = $('saveBtn').textContent;
+  $('saveBtn').textContent = '動画を取得中…';
+  try {
+    const blob = await fetch(lastResultUrl).then((r) => {
+      if (!r.ok) throw new Error('取得失敗 (' + r.status + ')');
+      return r.blob();
+    });
+    const file = new File([blob], 'edited.mp4', { type: 'video/mp4' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: '編集した動画' });
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'edited.mp4';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      toast('ダウンロードしました（写真に保存は共有から）');
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') { /* user cancelled */ }
+    else toast('保存に失敗: ' + (err.message || err));
+  } finally {
+    $('saveBtn').disabled = false;
+    $('saveBtn').textContent = prev;
+  }
+});
 
 // ---- toast ----
 let toastTimer = null;

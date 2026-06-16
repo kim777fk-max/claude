@@ -71,6 +71,7 @@ main { padding: 16px; max-width: 640px; margin: 0 auto; display: grid; gap: 14px
 }
 .btn:disabled { opacity: .45; }
 .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: 0; color: #08122b; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .actions { display: flex; gap: 10px; margin-top: 12px; }
 
 .progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
