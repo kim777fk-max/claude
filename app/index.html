@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
   <header class="topbar">
@@ -69,13 +69,17 @@
       <div id="autoStatus" class="meta hidden"></div>
       <div id="autoResult" class="result hidden">
         <div class="kv"><span>編集後</span><a id="autoUrl" target="_blank" rel="noopener"></a></div>
+        <div class="actions">
+          <button id="saveBtn" class="btn primary">📥 写真に保存 / 共有</button>
+          <a id="dlLink" class="btn" target="_blank" rel="noopener">⬇ ダウンロード</a>
+        </div>
       </div>
       <pre id="handoff" class="handoff hidden"></pre>
     </section>
 
     <p class="hint">コピー／共有した文章を <b>Claude Code</b> に貼り付けると、
       カット・結合・テロップ・BGM追加を行い、編集後の動画リンクを返します。</p>
-    <p class="hint" id="appVersion">v6</p>
+    <p class="hint" id="appVersion">v7</p>
   </main>
 
   <!-- 設定ダイアログ -->
@@ -109,6 +113,6 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
