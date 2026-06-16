@@ -45,16 +45,18 @@ app.post("/api/sign", (_req, res) => {
 // --- auto edit: prompt + source URL → edited video URL ---
 app.post("/api/edit", async (req, res) => {
   try {
-    const { url, prompt } = req.body || {};
-    if (!url || !prompt) {
-      return res.status(400).json({ error: "url and prompt are required" });
+    const { url, urls, prompt } = req.body || {};
+    const allUrls = Array.isArray(urls) && urls.length ? urls : (url ? [url] : []);
+    const sourceUrl = allUrls[0];
+    if (!sourceUrl || !prompt) {
+      return res.status(400).json({ error: "url (or urls) and prompt are required" });
     }
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
     }
     const jobId = Date.now().toString(36);
-    const plan = await buildEditPlan({ prompt, sourceUrl: url });
-    const result = await runPlan({ jobId, sourceUrl: url, plan });
+    const plan = await buildEditPlan({ prompt, sourceUrl, extraUrls: allUrls.slice(1) });
+    const result = await runPlan({ jobId, sourceUrl, plan });
     res.json({ ok: true, plan, ...result });
   } catch (err) {
     console.error(err);
