@@ -25,3 +25,9 @@ media/out/*
 node_modules/
 server/.env
 .env
+
+# Remotion build / cache
+remotion/.remotion/
+remotion/out/
+remotion/.cache/
+remotion/dist/
