@@ -37,30 +37,64 @@ def add(buf, start, samples):
     for i, s in enumerate(samples):
         buf[start + i] += s
 
-# --- Twinkle Twinkle Little Star (public domain), slow & gentle ---
-Q = 0.62   # quarter-note seconds (slow, sleepy)
-H = Q * 2  # half note
-# (name, octave, beats) — melody one octave up for music-box sparkle
-melody = [
- ('C',5,1),('C',5,1),('G',5,1),('G',5,1),('A',5,1),('A',5,1),('G',5,2),
- ('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,1),('D',5,1),('C',5,2),
- ('G',5,1),('G',5,1),('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,2),
- ('G',5,1),('G',5,1),('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,2),
- ('C',5,1),('C',5,1),('G',5,1),('G',5,1),('A',5,1),('A',5,1),('G',5,2),
- ('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,1),('D',5,1),('C',5,2),
-]
-# soft low harmony note at the start of each 7-note phrase, for warmth
-harmony_at = {0:('C',4), 7:('F',4), 14:('G',4), 21:('G',4), 28:('C',4), 35:('F',4)}
+# Usage:
+#   musicbox_gen.py [OUT.wav] [mode] [min_seconds]
+#   mode = twinkle (default) | campfire
+#   min_seconds = loop the piece until at least this long (default: one pass)
+mode = sys.argv[2] if len(sys.argv) > 2 else 'twinkle'
+min_seconds = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
 
 buf = []
-t = 0.0
-for idx, (name, octv, beats) in enumerate(melody):
-    dur = Q * beats
-    add(buf, int(t * SR), pluck(freq(name, octv), dur + 0.25, amp=0.5))
-    if idx in harmony_at:
-        hn, ho = harmony_at[idx]
-        add(buf, int(t * SR), pluck(freq(hn, ho), H + 0.4, amp=0.22))
-    t += dur
+
+if mode == 'twinkle':
+    # --- Twinkle Twinkle Little Star (public domain), slow & gentle ---
+    Q = 0.62   # quarter-note seconds (slow, sleepy)
+    H = Q * 2  # half note
+    # (name, octave, beats) — melody one octave up for music-box sparkle
+    melody = [
+     ('C',5,1),('C',5,1),('G',5,1),('G',5,1),('A',5,1),('A',5,1),('G',5,2),
+     ('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,1),('D',5,1),('C',5,2),
+     ('G',5,1),('G',5,1),('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,2),
+     ('G',5,1),('G',5,1),('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,2),
+     ('C',5,1),('C',5,1),('G',5,1),('G',5,1),('A',5,1),('A',5,1),('G',5,2),
+     ('F',5,1),('F',5,1),('E',5,1),('E',5,1),('D',5,1),('D',5,1),('C',5,2),
+    ]
+    # soft low harmony note at the start of each 7-note phrase, for warmth
+    harmony_at = {0:('C',4), 7:('F',4), 14:('G',4), 21:('G',4), 28:('C',4), 35:('F',4)}
+    t = 0.0
+    for idx, (name, octv, beats) in enumerate(melody):
+        dur = Q * beats
+        add(buf, int(t * SR), pluck(freq(name, octv), dur + 0.25, amp=0.5))
+        if idx in harmony_at:
+            hn, ho = harmony_at[idx]
+            add(buf, int(t * SR), pluck(freq(hn, ho), H + 0.4, amp=0.22))
+        t += dur
+
+elif mode == 'campfire':
+    # --- Warm, slow music-box arpeggio over a cozy progression (campfire night).
+    # I-vi-IV-V in C, played as gentle rolling arpeggios with a low warm root.
+    E = 0.42  # eighth-note seconds (slow, unhurried)
+    # each chord: (root note/oct, [arpeggio notes as (name, octave)])
+    prog = [
+        (('C',3), [('C',4),('E',4),('G',4),('C',5),('G',4),('E',4)]),  # C
+        (('A',2), [('A',3),('C',4),('E',4),('A',4),('E',4),('C',4)]),  # Am
+        (('F',2), [('F',3),('A',3),('C',4),('F',4),('C',4),('A',3)]),  # F
+        (('G',2), [('G',3),('B',3),('D',4),('G',4),('D',4),('B',3)]),  # G
+    ]
+    def render_pass(t0):
+        t = t0
+        for (rn, ro), arp in prog:
+            # warm low root, long soft decay, under the whole bar
+            add(buf, int(t * SR), pluck(freq(rn, ro), len(arp) * E + 1.2, amp=0.30))
+            for j, (nn, no) in enumerate(arp):
+                add(buf, int((t + j * E) * SR), pluck(freq(nn, no), E * 2 + 0.5, amp=0.42))
+            t += len(arp) * E
+        return t
+    t = render_pass(0.0)
+    while t < min_seconds:
+        t = render_pass(t)
+else:
+    sys.exit('unknown mode: ' + mode)
 
 # normalize to avoid clipping
 peak = max((abs(x) for x in buf), default=1.0) or 1.0
