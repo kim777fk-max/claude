@@ -16,6 +16,15 @@ OUT="${3:?output .m4a required}"
 REVERB="${4:-med}"
 GAIN="${5:-0.7}"
 
+# media/in/ is gitignored, so a fresh web session has no soundfont — fetch the
+# default bank on first use instead of failing.
+if [ ! -f "$SF" ]; then
+  echo "soundfont missing: $SF — downloading FluidR3 GM2 (~148MB, one-time per session)..." >&2
+  mkdir -p "$(dirname "$SF")"
+  curl -L --fail --retry 3 -o "$SF" \
+    "https://archive.org/download/free-soundfonts-sf2-2019-04/FluidR3_GM2-2.SF2"
+fi
+
 case "$REVERB" in
   none)  RV="" ;;
   light) RV="aecho=0.85:0.5:90|170:0.22|0.14," ;;
