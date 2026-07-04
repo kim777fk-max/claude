@@ -665,18 +665,18 @@ function scheduleFor(ym){
 /* 月の集計（実績） */
 function monthAgg(ym){
   const txns = monthTxns(ym);
-  let varCash=0, varCard=0, bankExp=0, income=0;
+  let varCash=0, varCard=0, bankExp=0, income=0, specialCard=0;
   const catSpent={};
   txns.forEach(t=>{
     const a=+t.amount;
     if(t.direction==="income"){ if(isBalancePay(t.payment_type)) income+=a; return; }
     if(t.payment_type==="cash") varCash+=a;
-    else if(t.payment_type==="card") varCard+=a;
+    else if(t.payment_type==="card"){ if(isSpecialUse(t)) specialCard+=a; else varCard+=a; }  // 特別支出は変動費から除外
     else bankExp+=a;
     const key = t.category_id||"null";
     catSpent[key]=(catSpent[key]||0)+a;
   });
-  return { varCash, varCard, bankExp, income, catSpent, txns };
+  return { varCash, varCard, bankExp, income, catSpent, txns, specialCard };
 }
 
 /* 未来月の計画ベース収支（年次・残高予測用） */
@@ -828,14 +828,25 @@ function renderDashboard(){
   $("#d-days").textContent = info.state==="current" ? `— 残り${info.daysRemain}日 / 全${info.daysInMonth}日` :
     (info.state==="past" ? "—（確定月）" : "—（未来月・計画）");
 
-  /* --- 安全ライン バナー --- */
+  /* --- 安全ライン バナー（当月＋年内の先の底もスキャン） --- */
   const banner = $("#d-banner");
-  if(proj.minBal < 0){
-    banner.innerHTML = `<div class="banner alert">🚨 <b>${info.m}/${proj.minDay} に残高がマイナス（${yen(proj.minBal)}）になる予測です。</b><br>入金予定の前倒し・支出の削減・計画の見直しが必要です。</div>`;
-  } else if(proj.minBal < line){
-    banner.innerHTML = `<div class="banner warn">⚠ ${info.m}/${proj.minDay} に残高が <b>${yen(proj.minBal)}</b> まで下がり、安全ライン（${yen(line)}）を割る予測です。</div>`;
+  let yearMin = { bal: proj.minBal, m: info.m, d: proj.minDay };
+  if(info.state==="current"){
+    for(let mo=info.m+1; mo<=12; mo++){
+      const p2 = buildDailyProjection(info.y+"-"+pad2(mo));
+      if(p2.minBal < yearMin.bal) yearMin = { bal:p2.minBal, m:mo, d:p2.minDay };
+    }
+  }
+  const yearNote = (yearMin.m!==info.m||yearMin.d!==proj.minDay)
+    ? `<br><span class="small">📉 年内の底：<b>${yearMin.m}/${yearMin.d} ${yen(yearMin.bal)}</b>${yearMin.bal<line?"（安全ライン割れ⚠）":""}</span>` : "";
+  if(proj.minBal < 0 || yearMin.bal < 0){
+    const w = proj.minBal<0? {m:info.m,d:proj.minDay,bal:proj.minBal} : yearMin;
+    banner.innerHTML = `<div class="banner alert">🚨 <b>${w.m}/${w.d} に残高がマイナス（${yen(w.bal)}）になる予測です。</b><br>入金予定の前倒し・支出の削減・計画の見直しが必要です。</div>`;
+  } else if(proj.minBal < line || yearMin.bal < line){
+    const w = proj.minBal<line? {m:info.m,d:proj.minDay,bal:proj.minBal} : yearMin;
+    banner.innerHTML = `<div class="banner warn">⚠ ${w.m}/${w.d} に残高が <b>${yen(w.bal)}</b> まで下がり、安全ライン（${yen(line)}）を割る予測です。${w.m!==info.m?"（先の月ですが今から備えを）":""}</div>`;
   } else {
-    banner.innerHTML = `<div class="banner ok">✓ 月内の残高は安全ライン（${yen(line)}）以上で推移する予測です（最低 ${info.m}/${proj.minDay}：${yen(proj.minBal)}）。</div>`;
+    banner.innerHTML = `<div class="banner ok">✓ 残高は安全ライン（${yen(line)}）以上で推移する予測です（今月の最低 ${info.m}/${proj.minDay}：${yen(proj.minBal)}）。${yearNote}</div>`;
   }
   const late = proj.lateGhosts||[];
   if(late.length){
@@ -852,10 +863,20 @@ function renderDashboard(){
     const perDay = info.daysRemain>0 ? Math.max(0,varBudget-varSpent)/info.daysRemain : 0;
     $("#d-allow-sub").textContent = `残り予算 ${yen(Math.max(0,varBudget-varSpent))} ÷ ${info.daysRemain}日 ≈ ${yen(perDay)}/日`;
   }else{
-    $("#d-allow-k").textContent = "変動費の残り予算";
-    $("#d-allow").textContent = varBudget>0? yen(varBudget-varSpent) : "—";
-    $("#d-allow").style.color = "";
-    $("#d-allow-sub").textContent = varBudget>0?"":"計画タブで上限を設定してください";
+    // 月の計画が未設定でも、カード枠（実効上限−実績−予定）から「自由に使える残り」を出す
+    const cardScores = CARDS.map(c=>({c, s:computeCardScore(c.id)})).filter(x=>x.s.hasLimit);
+    if(cardScores.length){
+      const freeSum = cardScores.reduce((t,x)=>t+Math.max(0,x.s.free),0);
+      $("#d-allow-k").textContent = "カード枠の残り（今月・予定を除く）";
+      $("#d-allow").textContent = yen(freeSum);
+      $("#d-allow").style.color = freeSum>0?"var(--green)":"var(--red)";
+      $("#d-allow-sub").textContent = cardScores.map(x=>`${x.c.name}${yen(Math.max(0,x.s.free))}`).join("・");
+    }else{
+      $("#d-allow-k").textContent = "変動費の残り予算";
+      $("#d-allow").textContent = varBudget>0? yen(varBudget-varSpent) : "—";
+      $("#d-allow").style.color = "";
+      $("#d-allow-sub").textContent = varBudget>0?"":"計画タブで上限を設定してください";
+    }
   }
 
   $("#d-var").textContent = yen(varSpent);
@@ -1179,17 +1200,20 @@ window.saveCardLimit = async (id)=>{
 };
 /* 🎮 スコア＆縛りの計算：使わなかった分→ポイント／使いすぎ→翌月の縛り（節約で基準まで返済）。特別支出は対象外 */
 const isSpecialUse = (t)=> (t.description||"").startsWith("特別");
+const isPlannedUse = (t)=> (t.description||"").startsWith("予定");
 function computeCardScore(cardId){
   const year=curYear(), nowYM=thisYM();
-  const usage={};
+  const usage={}, planned={};
   DATA.txns.forEach(t=>{
     if(t.direction==="expense" && t.payment_type==="card" && t.card_id===cardId && !isSpecialUse(t)){
-      const ym=t.txn_date.slice(0,7); usage[ym]=(usage[ym]||0)+ +t.amount;
+      const ym=t.txn_date.slice(0,7);
+      if(isPlannedUse(t)) planned[ym]=(planned[ym]||0)+ +t.amount;   // 予定＝予約枠（実績とは区別）
+      else usage[ym]=(usage[ym]||0)+ +t.amount;
     }
   });
   const lim=(ym)=> +((DATA.allLimits[cardId]||{})[ym]||0);
   let penalty=0, points=0;
-  for(let mo=1;mo<=12;mo++){                 // 確定した過去月を積み上げ
+  for(let mo=1;mo<=12;mo++){                 // 確定した過去月（実績のみ）を積み上げ
     const ym=year+"-"+pad2(mo);
     if(ym>=nowYM) break;
     const base=lim(ym); if(base<=0 && penalty<=0) continue;
@@ -1197,8 +1221,9 @@ function computeCardScore(cardId){
     if(diff>=0){ const pay=Math.min(penalty,diff); penalty-=pay; points+=(diff-pay); }
     else penalty+=-diff;
   }
-  const base=lim(nowYM), eff=Math.max(0,base-penalty), act=usage[nowYM]||0;
-  return { penalty, points, base, effective:eff, actual:act, remain:eff-act, hasLimit:(base>0||penalty>0) };
+  const base=lim(nowYM), eff=Math.max(0,base-penalty), act=usage[nowYM]||0, plan=planned[nowYM]||0;
+  return { penalty, points, base, effective:eff, actual:act, planned:plan,
+           free:eff-act-plan, hasLimit:(base>0||penalty>0) };
 }
 function renderCards(){
   const ym=curMonth(); $("#cd-month").textContent=ym;
@@ -1216,21 +1241,28 @@ function renderCards(){
     </div></div>`;
   $("#cd-panels").innerHTML = board + CARDS.map(c=>{
     const s=scores[c.id]; const used=usage[c.id]||0;
-    const eff=s.effective; const r=eff>0?used/eff:0;
-    const special=used-s.actual; // 特別支出（車検など）
+    const eff=s.effective; const booked=s.actual+s.planned; const r=eff>0?booked/eff:0;
+    const special=used-s.actual-s.planned; // 特別支出（車検など）
+    let pill;
+    if(!s.hasLimit) pill='<span class="pill b">枠なし</span>';
+    else if(s.actual>eff) pill=`<span class="pill r">超過 ${Math.round(s.actual/eff*100)}%</span>`;
+    else if(booked>eff*1.005) pill=`<span class="pill y">予定オーバー</span>`;
+    else if(s.free<=0) pill=`<span class="pill g">予定内 100%</span>`;
+    else pill=`<span class="pill g">余裕 ${Math.round(r*100)}%</span>`;
     return `<div class="cardpanel">
       <div class="row1">
         <span class="pill" style="background:${esc(c.color)}33;color:${esc(c.color)};font-size:14px">${esc(c.name)}</span>
         ${s.penalty>0?`<span class="pill r small">縛り −${num0(s.penalty)}</span>`:""}
         ${c.payment_day?`<span class="small muted">引落 毎月${c.payment_day}日</span>`:""}
-        <span style="margin-left:auto">${s.hasLimit?statusPill(s.actual,eff):'<span class="pill g">—</span>'}</span>
+        <span style="margin-left:auto">${pill}</span>
         <button class="btn sm secondary" onclick="delCard(${c.id})">削除</button>
       </div>
       ${s.hasLimit?`<div class="bar" style="margin-top:10px"><span style="width:${Math.min(100,r*100)}%;background:${barColor(r)}"></span></div>`:""}
       <div class="nums">
-        <div class="n"><div class="k">利用（ゲーム対象）</div><div class="v">${yen(s.actual)}</div></div>
-        <div class="n"><div class="k">今月使える（実効）</div><div class="v">${s.hasLimit?yen(eff):"—"}</div></div>
-        <div class="n"><div class="k">あと</div><div class="v" style="color:${s.remain<0?'var(--red)':'#69db7c'}">${s.hasLimit?(s.remain>=0?yen(s.remain):"超過 "+yen(-s.remain)):"—"}</div></div>
+        <div class="n"><div class="k">実績</div><div class="v">${yen(s.actual)}</div></div>
+        ${s.planned>0?`<div class="n"><div class="k">予定（予約済み）</div><div class="v" style="opacity:.75">${yen(s.planned)}</div></div>`:""}
+        <div class="n"><div class="k">今月の枠（実効）</div><div class="v">${s.hasLimit?yen(eff):"—"}</div></div>
+        <div class="n"><div class="k">自由に使える残り</div><div class="v" style="color:${s.hasLimit?(s.free<0?'var(--red)':'#69db7c'):'var(--muted)'}">${s.hasLimit?(s.free>=0?yen(s.free):"超過 "+yen(-s.free)):"—"}</div></div>
         ${s.points>0?`<div class="n"><div class="k">獲得pt</div><div class="v" style="color:#69db7c">${num0(s.points)}</div></div>`:""}
       </div>
       ${special>0?`<div class="small muted">＋特別支出 ${yen(special)}（ゲーム対象外）</div>`:""}
