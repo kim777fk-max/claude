@@ -601,7 +601,7 @@ async function loadAll(){
     sb.from("expense_monthly_plans").select("*").like("year_month",year+"-%"),
     sb.from("expense_category_budgets").select("*").eq("year_month",ym).eq("payment_type","any"),
     sb.from("expense_year_settings").select("*").eq("year",year).maybeSingle(),
-    sb.from("expense_card_limits").select("*").eq("year_month",ym),
+    sb.from("expense_card_limits").select("*").like("year_month",year+"-%"),
     sb.from("expense_recurring").select("*").eq("is_active",true).order("day_of_month"),
   ]);
   CATEGORIES = cats.data||[]; CARDS = cards.data||[];
@@ -611,7 +611,9 @@ async function loadAll(){
   DATA.plans = {}; (plans.data||[]).forEach(p=> DATA.plans[p.year_month]=p);
   DATA.buds = buds.data||[];
   DATA.ysetting = ys.data||null;
-  DATA.limits = {}; (lims.data||[]).forEach(l=> DATA.limits[l.card_id]=+l.limit_amount);
+  DATA.limits = {}; DATA.allLimits = {};
+  (lims.data||[]).forEach(l=>{ (DATA.allLimits[l.card_id]=DATA.allLimits[l.card_id]||{})[l.year_month]=+l.limit_amount;
+    if(l.year_month===ym) DATA.limits[l.card_id]=+l.limit_amount; });
   DATA.recurring = recs.data||[];
 }
 async function reloadAll(){
@@ -1175,29 +1177,66 @@ window.saveCardLimit = async (id)=>{
   if(error){ showMsg("#cardMsg",errJP(error),false); return; }
   await reloadAll();
 };
+/* 🎮 スコア＆縛りの計算：使わなかった分→ポイント／使いすぎ→翌月の縛り（節約で基準まで返済）。特別支出は対象外 */
+const isSpecialUse = (t)=> (t.description||"").startsWith("特別");
+function computeCardScore(cardId){
+  const year=curYear(), nowYM=thisYM();
+  const usage={};
+  DATA.txns.forEach(t=>{
+    if(t.direction==="expense" && t.payment_type==="card" && t.card_id===cardId && !isSpecialUse(t)){
+      const ym=t.txn_date.slice(0,7); usage[ym]=(usage[ym]||0)+ +t.amount;
+    }
+  });
+  const lim=(ym)=> +((DATA.allLimits[cardId]||{})[ym]||0);
+  let penalty=0, points=0;
+  for(let mo=1;mo<=12;mo++){                 // 確定した過去月を積み上げ
+    const ym=year+"-"+pad2(mo);
+    if(ym>=nowYM) break;
+    const base=lim(ym); if(base<=0 && penalty<=0) continue;
+    const eff=Math.max(0,base-penalty), act=usage[ym]||0, diff=eff-act;
+    if(diff>=0){ const pay=Math.min(penalty,diff); penalty-=pay; points+=(diff-pay); }
+    else penalty+=-diff;
+  }
+  const base=lim(nowYM), eff=Math.max(0,base-penalty), act=usage[nowYM]||0;
+  return { penalty, points, base, effective:eff, actual:act, remain:eff-act, hasLimit:(base>0||penalty>0) };
+}
 function renderCards(){
   const ym=curMonth(); $("#cd-month").textContent=ym;
   if(!CARDS.length){ $("#cd-panels").innerHTML=`<p class="muted" style="text-align:center;padding:14px">カード未登録。下のフォームから追加してください。</p>`; return; }
   const usage={};
   monthTxns(ym).forEach(t=>{ if(t.direction==="expense" && t.payment_type==="card" && t.card_id){ usage[t.card_id]=(usage[t.card_id]||0)+ +t.amount; } });
-  $("#cd-panels").innerHTML = CARDS.map(c=>{
-    const used=usage[c.id]||0; const lim=DATA.limits[c.id]||0; const remain=lim-used; const r=lim>0?used/lim:0;
+  const scores={}; let totalPts=0, totalPenalty=0;
+  CARDS.forEach(c=>{ const s=computeCardScore(c.id); scores[c.id]=s; totalPts+=s.points; totalPenalty+=s.penalty; });
+  const board = `<div class="cardpanel" style="border-color:rgba(77,171,247,.4);background:linear-gradient(180deg,rgba(77,171,247,.08),var(--panel2))">
+    <div class="row1"><span style="font-size:15px;font-weight:800">🎮 スコアボード</span>
+      <span style="margin-left:auto" class="small muted">使わなかった分がポイント／使いすぎは翌月の縛り</span></div>
+    <div class="nums" style="margin-top:8px">
+      <div class="n"><div class="k">累計ポイント</div><div class="v" style="color:#69db7c">${num0(totalPts)} pt</div></div>
+      <div class="n"><div class="k">現在の縛り合計</div><div class="v" style="color:${totalPenalty>0?'var(--red)':'inherit'}">${totalPenalty>0?"−"+yen(totalPenalty):"なし"}</div></div>
+    </div></div>`;
+  $("#cd-panels").innerHTML = board + CARDS.map(c=>{
+    const s=scores[c.id]; const used=usage[c.id]||0;
+    const eff=s.effective; const r=eff>0?used/eff:0;
+    const special=used-s.actual; // 特別支出（車検など）
     return `<div class="cardpanel">
       <div class="row1">
         <span class="pill" style="background:${esc(c.color)}33;color:${esc(c.color)};font-size:14px">${esc(c.name)}</span>
+        ${s.penalty>0?`<span class="pill r small">縛り −${num0(s.penalty)}</span>`:""}
         ${c.payment_day?`<span class="small muted">引落 毎月${c.payment_day}日</span>`:""}
-        <span style="margin-left:auto">${statusPill(used,lim)}</span>
+        <span style="margin-left:auto">${s.hasLimit?statusPill(s.actual,eff):'<span class="pill g">—</span>'}</span>
         <button class="btn sm secondary" onclick="delCard(${c.id})">削除</button>
       </div>
-      <div class="bar" style="margin-top:10px"><span style="width:${Math.min(100,r*100)}%;background:${barColor(r)}"></span></div>
+      ${s.hasLimit?`<div class="bar" style="margin-top:10px"><span style="width:${Math.min(100,r*100)}%;background:${barColor(r)}"></span></div>`:""}
       <div class="nums">
-        <div class="n"><div class="k">利用実績</div><div class="v">${yen(used)}</div></div>
-        <div class="n"><div class="k">残り</div><div class="v" style="color:${remain<0?'var(--red)':'inherit'}">${lim>0?yen(remain):"—"}</div></div>
-        <div class="n"><div class="k">使用率</div><div class="v">${lim>0?Math.round(r*100)+"%":"—"}</div></div>
+        <div class="n"><div class="k">利用（ゲーム対象）</div><div class="v">${yen(s.actual)}</div></div>
+        <div class="n"><div class="k">今月使える（実効）</div><div class="v">${s.hasLimit?yen(eff):"—"}</div></div>
+        <div class="n"><div class="k">あと</div><div class="v" style="color:${s.remain<0?'var(--red)':'#69db7c'}">${s.hasLimit?(s.remain>=0?yen(s.remain):"超過 "+yen(-s.remain)):"—"}</div></div>
+        ${s.points>0?`<div class="n"><div class="k">獲得pt</div><div class="v" style="color:#69db7c">${num0(s.points)}</div></div>`:""}
       </div>
+      ${special>0?`<div class="small muted">＋特別支出 ${yen(special)}（ゲーム対象外）</div>`:""}
       <div class="limitedit">
-        <span class="small muted">月の上限</span>
-        <input class="ipt cdlim" data-id="${c.id}" type="number" inputmode="numeric" min="0" step="1000" value="${lim||""}" placeholder="未設定" />
+        <span class="small muted">基準の月上限</span>
+        <input class="ipt cdlim" data-id="${c.id}" type="number" inputmode="numeric" min="0" step="1000" value="${s.base||""}" placeholder="未設定" />
         <button class="btn sm" onclick="saveCardLimit(${c.id})">保存</button>
       </div>
     </div>`;
