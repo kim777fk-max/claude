@@ -1,3 +1,7 @@
+> このリポジトリは GitHub Pages で **2つのアプリ** を配信しています:
+> - 🎬 動画編集アップローダー → https://kim777fk-max.github.io/claude/uploader/ （このREADMEのツール群）
+> - 💰 家計・資金管理アプリ → https://kim777fk-max.github.io/claude/ （説明は [`app/README.md`](app/README.md)）
+
 # 📱 スマホから動画編集 (Claude Code 動画ツールキット)
 
 ローカル Mac でやっていた動画編集を、**スマホの Claude Code アプリから指示するだけ**で
