@@ -54,7 +54,7 @@ function pruneJobs() {
 }
 
 // Post the result to Discord (if a webhook is configured) as "まるくん".
-const APP_BASE_URL = (process.env.APP_BASE_URL || "https://kim777fk-max.github.io/claude").replace(/\/$/, "");
+const APP_BASE_URL = (process.env.APP_BASE_URL || "https://kim777fk-max.github.io/claude/uploader").replace(/\/$/, "");
 
 async function notifyDiscord(job) {
   const hook = process.env.DISCORD_WEBHOOK_URL;

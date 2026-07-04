@@ -21,7 +21,7 @@ need_ffmpeg
 FILE="${1:?usage: deliver.sh FILE}"
 [ -f "$FILE" ] || die "file not found: $FILE"
 MAX_MB="${MAX_MB:-95}"
-SAVE_BASE="${SAVE_BASE:-https://kim777fk-max.github.io/claude/save.html}"
+SAVE_BASE="${SAVE_BASE:-https://kim777fk-max.github.io/claude/uploader/save.html}"
 
 size_mb() { du -m "$1" | cut -f1; }
 

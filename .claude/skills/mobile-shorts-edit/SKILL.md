@@ -92,7 +92,7 @@ scripts/shorts.sh media/out/final.mp4 media/out/props.json
 ```bash
 URL="$(scripts/shorts.sh media/out/final.mp4 media/out/props.json | tail -1)"
 ENC="$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$URL")"
-echo "[📥 写真に保存](https://kim777fk-max.github.io/claude/save.html?u=$ENC) ／ [▶ 再生]($URL)"
+echo "[📥 写真に保存](https://kim777fk-max.github.io/claude/uploader/save.html?u=$ENC) ／ [▶ 再生]($URL)"
 ```
 
 ## 利用できるフォーマット
