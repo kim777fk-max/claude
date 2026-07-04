@@ -725,10 +725,16 @@ function computeYear(year){
     }else if(info.state==="current"){
       const o=currentMonthOutlook(ym); inc=o.inc; exp=o.exp; kind="current";
       const a=o.agg;
-      cumActual = cum + (a.income-(a.varCash+a.bankExp));
+      // 現在残高＝月初＋「今日まで」の実績のみ（未来の予定は含めない）
+      const td=todayISO(); let toDate=0;
+      a.txns.forEach(t=>{ if(isBalancePay(t.payment_type) && t.txn_date<=td) toDate += (t.direction==="income"? +t.amount : -t.amount); });
+      cumActual = cum + toDate;
       nowBalance = cumActual; hasActual = hasActual||a.txns.length>0;
     }else{
-      const f=futureMonthPlan(ym); inc=f.inc; exp=f.exp; kind="future";
+      // 未来月：予測明細（CSV/予定）があればそれを使い、無ければ計画＋定期で見込む
+      const a=monthAgg(ym);
+      if(a.txns.length){ inc=a.income; exp=a.varCash+a.bankExp; kind="future"; }
+      else { const f=futureMonthPlan(ym); inc=f.inc; exp=f.exp; kind="future"; }
     }
     const net=inc-exp; cum+=net;
     if(info.state==="past"){ cumActual=cum; nowBalance=cum; }
