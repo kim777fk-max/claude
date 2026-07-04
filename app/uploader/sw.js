@@ -1,12 +1,12 @@
 // Service worker: installable PWA + reliable updates.
 // App assets use NETWORK-FIRST so the newest code reaches the device when online
 // (cache-first previously could serve stale app.js). Falls back to cache offline.
-const CACHE = 'video-uploader-v7';
+const CACHE = 'video-uploader-v8';
 const SHELL = [
   './',
   './index.html',
-  './style.css?v=7',
-  './app.js?v=7',
+  './style.css?v=8',
+  './app.js?v=8',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

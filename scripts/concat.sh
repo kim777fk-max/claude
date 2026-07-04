@@ -7,6 +7,14 @@
 # clip's size, letterboxed to keep aspect). Clips with no audio track get a
 # silent track synthesized so the join still works.
 #
+# The output resolution follows the FIRST clip (portrait first = portrait out),
+# capped at MAX_DIM on the long side (default 1920: 4K in -> 1080p out) so SNS
+# deliverables stay fast to encode and under upload size limits.
+#
+# Env:
+#   MAX_DIM=1920   cap for the long side (0 = keep first clip's full size)
+#   CRF=21         x264 quality (lower = better/bigger)
+#
 # Example:
 #   scripts/concat.sh media/out/joined.mp4 media/in/a.mp4 media/in/b.mp4
 set -euo pipefail
@@ -22,6 +30,17 @@ n="$#"
 # target size from the first input
 read -r W H < <(ffprobe -v error -select_streams v:0 \
   -show_entries stream=width,height -of csv=p=0:s=x "$1" | tr 'x' ' ')
+[ -n "${W:-}" ] && [ -n "${H:-}" ] || die "could not probe size of first input: $1"
+
+# cap the long side at MAX_DIM (keeps aspect, even dimensions for yuv420p)
+MAX_DIM="${MAX_DIM:-1920}"
+CRF="${CRF:-21}"
+if [ "$MAX_DIM" -gt 0 ]; then
+  # note: awk must end with a newline (print, not printf) or read exits
+  # non-zero at EOF and set -e kills the script
+  read -r W H < <(awk -v w="$W" -v h="$H" -v m="$MAX_DIM" \
+    'BEGIN{L=(w>h)?w:h; s=(L>m)?m/L:1; print int(w*s/2)*2, int(h*s/2)*2}')
+fi
 
 # real inputs first
 args=()
@@ -52,5 +71,5 @@ done
 filters+="${maps}concat=n=${n}:v=1:a=1[v][a]"
 
 ffmpeg -y "${args[@]}" -filter_complex "$filters" -map "[v]" -map "[a]" \
-  -c:v libx264 -preset veryfast -crf 18 -c:a aac -movflags +faststart "$OUT"
+  -c:v libx264 -preset veryfast -crf "$CRF" -c:a aac -movflags +faststart "$OUT"
 echo "wrote: $OUT"

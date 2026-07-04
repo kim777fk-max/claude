@@ -30,7 +30,9 @@ FADE="${FADE:-2}"
 
 DUR="$(probe_duration "$IN")"
 fade_filter=""
-if [ "${FADE%.*}" != "0" ] && [ -n "$DUR" ]; then
+# awk handles decimals (FADE=0.5); string-stripping "${FADE%.*}" would wrongly
+# treat any value below 1 as zero and silently disable the fade.
+if [ -n "$DUR" ] && awk -v f="$FADE" 'BEGIN{exit !(f>0)}'; then
   st="$(awk -v d="$DUR" -v f="$FADE" 'BEGIN{printf "%.3f", (d-f>0)?d-f:0}')"
   fade_filter=",afade=t=out:st=${st}:d=${FADE}"
 fi

@@ -7,7 +7,7 @@
 Web セッションのコンテナは毎回新しく作られ、ffmpeg は入っていません。動画作業の前に必ず:
 
 ```bash
-bash scripts/setup.sh   # ffmpeg と日本語フォントを入れる（導入済みなら即終了）
+bash scripts/setup.sh   # ffmpeg・日本語フォント・fluidsynth・mido/numpy（導入済みなら即終了）
 ```
 
 ## 入出力の場所
@@ -28,26 +28,47 @@ bash scripts/setup.sh   # ffmpeg と日本語フォントを入れる（導入�
 ## スクリプト一覧
 | やりたいこと | コマンド |
 |---|---|
-| カット / トリミング | `scripts/cut.sh INPUT START END [OUT]`（END は `+10` で「10秒間」） |
-| 結合 / つなぐ | `scripts/concat.sh OUT IN1 IN2 [IN3...]` |
+| カット / トリミング | `scripts/cut.sh INPUT START END [OUT]`（END は `+10` で「10秒間」。4K→1080p自動縮小） |
+| 結合 / つなぐ | `scripts/concat.sh OUT IN1 IN2 [IN3...]`（先頭クリップの向き基準・長辺1920に自動縮小） |
+| 縦型ショート化 9:16 | `scripts/vertical.sh INPUT [OUT] [START] [DURATION]`（ぼかし背景フィル） |
+| 写真→クリップ | `scripts/imgclip.sh IMAGE [OUT] [SECONDS]`（縦型は `SIZE=1080x1920`） |
 | テロップ / 字幕 | `scripts/telop.sh INPUT "文字" [OUT] [START] [END]` |
-| BGM 追加 | `scripts/music.sh INPUT MUSIC [OUT]`（`MODE=replace` で差し替え） |
-| Cloudinaryへアップ（署名・上限なし） | `scripts/upload.sh FILE` → `secure_url` を出力 |
+| BGM 追加 | `scripts/music.sh INPUT MUSIC [OUT]`（`MODE=replace` で差し替え。曲が短ければ自動ループ） |
+| 納品（圧縮→アップ→保存リンク） | `scripts/deliver.sh FILE` → `URL=`/`SAVE=`/`MD=` を出力（100MB超は自動圧縮） |
+| Cloudinaryへアップのみ | `scripts/upload.sh FILE` → `secure_url` を出力（**動画1本100MBまで**） |
+
+### BGM を自作する（音源URLが無いとき・全部著作権フリー）
+| 方法 | コマンド |
+|---|---|
+| クラシックMIDI→好きな音色 | `python3 scripts/midi_arrange.py in.mid out.mid piano`（organ/harpsichord/strings/aria/layers/metal/prog:10=オルゴール）→ `scripts/sf_render.sh media/in/fluidr3.sf2 out.mid bgm.m4a med`（サウンドフォント自動DL） |
+| 感情込め（強弱・rit付与） | `python3 scripts/midi_express.py in.mid out.mid 0.6` |
+| ファミコン8bit音源 | `python3 scripts/midi_render_synth.py in.mid out.wav chiptune 999` |
+| オルゴール自作曲 | `python3 scripts/musicbox_gen.py out.wav campfire 60` |
+| RPGバトル風自作曲 | `python3 scripts/battle_bgm.py out.wav 40` |
+
+フリーMIDIは `https://www.flutetunes.com/tunes/<slug>.mid` が直リンク（例: schubert-ave-maria,
+pachelbel-canon-in-d-major, bach-air-on-the-g-string, greensleeves, joplin-the-entertainer）。
+歌入りは Sinsy（無料API・日/英/中）: 歌詞つきMusicXMLを `POST https://sinsy.sp.nitech.ac.jp/api/synthesize` へ。
 
 詳細な引数・環境変数は各スクリプト冒頭のコメント、または `README.md` 参照。
 
 ## メインの使い方：スマホから貼り付け（スキル `mobile-video-edit`）
 ユーザーの主動線は「**アップローダーアプリでアップ → 『Claude用にコピー』→ Claude アプリに貼り付け**」。
 貼り付け（`Cloudinary の動画を編集してください…URL…やりたいこと…`）を受けたら **スキル `mobile-video-edit`** の手順で:
-1. `bash scripts/setup.sh`（ffmpeg 用意）
-2. URL を順番に読み、指示に応じて `cut/concat/telop/music` を実行（→ `media/out/`）
-3. `URL=$(scripts/upload.sh media/out/final.mp4)` でアップ
-4. **写真に保存できるタップリンク**を返す:
-   `https://kim777fk-max.github.io/claude/save.html?u=<URLエンコードした secure_url>`
-   返信はタップできる Markdown リンクにする（コピペ不要）。
+1. `bash scripts/setup.sh`（ツール用意）
+2. URL を順番に読み、指示に応じて `cut/concat/vertical/imgclip/telop/music` を実行（→ `media/out/`）
+   BGM の音源が無ければ「BGM を自作する」の表から生成する。
+3. `scripts/deliver.sh media/out/final.mp4` で圧縮チェック→アップ→保存リンクまで一括。
+4. 出力された `MD=` の行（📥写真に保存 ／ ▶再生）をそのまま返信に使う（コピペ不要）。
+
+## SNS投稿向けの編集ルール（アルゴリズム正典）
+投稿向け（ショート/Reels/X等）の編集では `.claude/skills/mobile-video-edit/references/algorithm_playbook.md`
+を必ず参照（配信先ごとの尺・fade0原則・ループ7-15秒・テロップ規則・カット採点・-14 LUFS・観測指標）。
+装飾の濃い依頼（自動字幕/OP/ED/効果音/Bロール/ジャンプカット/Remotion名指し）はスキル `mobile-shorts-edit` へ。
 
 ## 進め方の指針
 - 複数工程（例: カット→結合→テロップ→BGM）は中間ファイルを `media/out/` に置いて順番に処理する。
 - ユーザーの指示が曖昧なとき（開始/終了秒、テロップ位置、BGM音量など）は、まず動画の長さ・解像度を `ffprobe` で確認し、妥当な既定値で進めて結果を見せる。
 - 元ファイルは上書きしない。
+- 4K複数本の結合や長尺の再エンコードは Bash の2分制限を超えやすい → `run_in_background` で実行する。
 - Adobe 系 MCP の動画ツールは限定的（自動ハイライト `video_create_quick_cut`、リサイズ `video_resize`、音声分離 `media_enhance_speech`、要約 `media_summarize` のみ）。任意位置のカット/結合/テロップ/BGM は上記スクリプト（ffmpeg）で行う。
