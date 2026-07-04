@@ -61,6 +61,11 @@ pachelbel-canon-in-d-major, bach-air-on-the-g-string, greensleeves, joplin-the-e
 3. `scripts/deliver.sh media/out/final.mp4` で圧縮チェック→アップ→保存リンクまで一括。
 4. 出力された `MD=` の行（📥写真に保存 ／ ▶再生）をそのまま返信に使う（コピペ不要）。
 
+## SNS投稿向けの編集ルール（アルゴリズム正典）
+投稿向け（ショート/Reels/X等）の編集では `.claude/skills/mobile-video-edit/references/algorithm_playbook.md`
+を必ず参照（配信先ごとの尺・fade0原則・ループ7-15秒・テロップ規則・カット採点・-14 LUFS・観測指標）。
+装飾の濃い依頼（自動字幕/OP/ED/効果音/Bロール/ジャンプカット/Remotion名指し）はスキル `mobile-shorts-edit` へ。
+
 ## 進め方の指針
 - 複数工程（例: カット→結合→テロップ→BGM）は中間ファイルを `media/out/` に置いて順番に処理する。
 - ユーザーの指示が曖昧なとき（開始/終了秒、テロップ位置、BGM音量など）は、まず動画の長さ・解像度を `ffprobe` で確認し、妥当な既定値で進めて結果を見せる。
