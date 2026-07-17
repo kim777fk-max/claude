@@ -4,17 +4,16 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { functionsBaseUrl, todayJST, upsertBriefing } from "./db.ts";
 
 // ============================================================
-// エンドポイント（env で上書き可能。デフォルト値は要確認: developers.biz.moneyforward.com 参照）
+// エンドポイント（env で上書き可能。デフォルト値の出典:
+// https://developers.api-accounting.moneyforward.com/ の OpenAPI 定義
+// （securitySchemes.OAuth2 / servers / GET /api/v3/journals）2026-07-17確認）
 // ============================================================
 
-// 要確認: developers.biz.moneyforward.com 参照（MFクラウド会計 API の OAuth 認可エンドポイント）
 const DEFAULT_MF_AUTH_URL = "https://api.biz.moneyforward.com/authorize";
-// 要確認: developers.biz.moneyforward.com 参照（MFクラウド会計 API の OAuth トークンエンドポイント）
 const DEFAULT_MF_TOKEN_URL = "https://api.biz.moneyforward.com/token";
-// 要確認: developers.biz.moneyforward.com 参照（MFクラウド会計 API v3 のベースURL）
-const DEFAULT_MF_API_BASE = "https://api.biz.moneyforward.com/api/v3";
-// 要確認: developers.biz.moneyforward.com 参照（クラウド会計API利用に必要なOAuthスコープ）
-const DEFAULT_MF_SCOPE = "mfc/accounting/data.write";
+const DEFAULT_MF_API_BASE = "https://api-accounting.moneyforward.com/api/v3";
+// GET /journals に必要なスコープ（=「仕訳の参照」）。MFアプリポータル側でも同スコープの許可が必要。
+const DEFAULT_MF_SCOPE = "mfc/accounting/journal.read";
 
 export function mfAuthUrl(): string {
   return Deno.env.get("MF_AUTH_URL") || DEFAULT_MF_AUTH_URL;
@@ -96,48 +95,43 @@ export interface TokenResponse {
   expires_in: number; // 秒
 }
 
-export async function exchangeCodeForToken(
-  code: string,
-  redirectUri: string,
-): Promise<TokenResponse> {
+/** MF認可サーバーのクライアント認証は client_secret_basic（Basicヘッダ必須・ボディのsecretは不可 [A157304]）。 */
+function basicAuthHeader(): string {
   const clientId = requireEnv("MF_CLIENT_ID");
   const clientSecret = requireEnv("MF_CLIENT_SECRET");
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: redirectUri,
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
+  return "Basic " + btoa(`${clientId}:${clientSecret}`);
+}
+
+async function postTokenRequest(params: Record<string, string>, label: string): Promise<TokenResponse> {
   const res = await fetchWithRetry(mfTokenUrl(), {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: basicAuthHeader(),
+    },
+    body: new URLSearchParams(params),
   });
   if (!res.ok) {
-    throw new Error(`MFトークン交換に失敗: ${res.status} ${await safeText(res)}`);
+    throw new Error(`${label}: ${res.status} ${await safeText(res)}`);
   }
   return (await res.json()) as TokenResponse;
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<TokenResponse> {
-  const clientId = requireEnv("MF_CLIENT_ID");
-  const clientSecret = requireEnv("MF_CLIENT_SECRET");
-  const body = new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
-  const res = await fetchWithRetry(mfTokenUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  if (!res.ok) {
-    throw new Error(`MFトークンrefreshに失敗: ${res.status} ${await safeText(res)}`);
-  }
-  return (await res.json()) as TokenResponse;
+export function exchangeCodeForToken(
+  code: string,
+  redirectUri: string,
+): Promise<TokenResponse> {
+  return postTokenRequest(
+    { grant_type: "authorization_code", code, redirect_uri: redirectUri },
+    "MFトークン交換に失敗",
+  );
+}
+
+export function refreshAccessToken(refreshToken: string): Promise<TokenResponse> {
+  return postTokenRequest(
+    { grant_type: "refresh_token", refresh_token: refreshToken },
+    "MFトークンrefreshに失敗",
+  );
 }
 
 export interface RefreshOutcome {
@@ -207,9 +201,9 @@ async function writeReauthAlert(
 
 // ============================================================
 // journals（仕訳）取得
-// 要確認: developers.biz.moneyforward.com の最新仕様で GET /journals のレスポンス形式を確認すること。
-// ここでは「借方(debits)/貸方(credits)の配列＋ページングmetadata.total_pages」という
-// 一般的な会計API形式を前提にしている。
+// 実レスポンスは journals[].branches[]（各行に remark / debitor / creditor が1つずつ）。
+// mf-sync 側の変換ロジック互換のため、branches を debits/credits 配列へ写像して返す
+// （出典: developers.api-accounting.moneyforward.com OpenAPI GET /api/v3/journals 2026-07-17確認）。
 // ============================================================
 
 export interface MfJournalEntry {
@@ -222,18 +216,73 @@ export interface MfJournalEntry {
 export interface MfJournal {
   id: string | number;
   transaction_date: string; // "YYYY-MM-DD"
-  journal_type?: string | null; // 期首仕訳は "JOURNAL_TYPE_OPENING" 等
+  journal_type?: string | null; // 実APIは journal_entry / adjusting_entry
   remark?: string | null;
   debits: MfJournalEntry[];
   credits: MfJournalEntry[];
 }
 
-interface MfJournalsPage {
-  journals: MfJournal[];
-  metadata: { total_count: number; total_pages: number; current_page: number };
+// ---- 実APIの生レスポンス型（必要フィールドのみ） ----
+interface MfRawBranchSide {
+  value?: number | null;
+  account_name?: string | null;
+  sub_account_name?: string | null;
 }
 
-/** 指定期間の仕訳を metadata.total_pages に従って全ページ取得する。 */
+interface MfRawBranch {
+  remark?: string | null;
+  debitor?: MfRawBranchSide | null;
+  creditor?: MfRawBranchSide | null;
+}
+
+interface MfRawJournal {
+  id: string | number;
+  transaction_date: string;
+  journal_type?: string | null;
+  branches?: MfRawBranch[] | null;
+}
+
+interface MfJournalsPage {
+  journals: MfRawJournal[];
+  metadata: { total_count: number; total_pages: number };
+}
+
+/** 実APIの branches 形式を、変換ロジックが期待する debits/credits 形式へ写像する。 */
+function adaptJournal(raw: MfRawJournal): MfJournal {
+  const branches = raw.branches ?? [];
+  const debits: MfJournalEntry[] = [];
+  const credits: MfJournalEntry[] = [];
+  let remark: string | null = null;
+  for (const b of branches) {
+    if (!remark && b.remark) remark = b.remark;
+    if (b.debitor?.account_name || b.debitor?.value) {
+      debits.push({
+        account_item_name: b.debitor?.account_name ?? "",
+        sub_account_name: b.debitor?.sub_account_name ?? null,
+        amount: Number(b.debitor?.value ?? 0),
+        description: b.remark ?? null,
+      });
+    }
+    if (b.creditor?.account_name || b.creditor?.value) {
+      credits.push({
+        account_item_name: b.creditor?.account_name ?? "",
+        sub_account_name: b.creditor?.sub_account_name ?? null,
+        amount: Number(b.creditor?.value ?? 0),
+        description: b.remark ?? null,
+      });
+    }
+  }
+  return {
+    id: raw.id,
+    transaction_date: raw.transaction_date,
+    journal_type: raw.journal_type ?? null,
+    remark,
+    debits,
+    credits,
+  };
+}
+
+/** 指定期間の仕訳を metadata.total_pages に従って全ページ取得する（期間指定は start_date / end_date）。 */
 export async function fetchAllJournals(
   accessToken: string,
   fromDate: string,
@@ -244,8 +293,8 @@ export async function fetchAllJournals(
   let totalPages = 1;
   do {
     const url = new URL(`${mfApiBase()}/journals`);
-    url.searchParams.set("from_date", fromDate);
-    url.searchParams.set("to_date", toDate);
+    url.searchParams.set("start_date", fromDate);
+    url.searchParams.set("end_date", toDate);
     url.searchParams.set("page", String(page));
     url.searchParams.set("per_page", "100");
     const res = await fetchWithRetry(url.toString(), {
@@ -258,7 +307,7 @@ export async function fetchAllJournals(
       throw new Error(`MF API journals取得に失敗: ${res.status} ${await safeText(res)}`);
     }
     const json = (await res.json()) as MfJournalsPage;
-    journals.push(...(json.journals ?? []));
+    journals.push(...(json.journals ?? []).map(adaptJournal));
     totalPages = json.metadata?.total_pages ?? 1;
     page++;
   } while (page <= totalPages);

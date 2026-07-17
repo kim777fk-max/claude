@@ -140,7 +140,8 @@ function convertJournal(
     category_id: categoryId,
     card_id: cardId,
     description: description || null,
-    source: "mf-api",
+    // 既存テーブルの check 制約は 'mf'|'csv'|'manual'|'recurring' のみ（MCP手動同期分も 'mf'）
+    source: "mf",
   };
 }
 

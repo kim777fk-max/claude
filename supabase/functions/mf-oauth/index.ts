@@ -107,6 +107,8 @@ Deno.serve(async (req) => {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     } catch (e) {
+      // 失敗原因を関数ログにも残す（ブラウザ表示だけだと調査できないため）
+      console.error("mf-oauth callback failed:", (e as Error).message);
       return new Response(errorHtml((e as Error).message), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },
