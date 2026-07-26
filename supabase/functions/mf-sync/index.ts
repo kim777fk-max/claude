@@ -184,18 +184,36 @@ Deno.serve(async (req) => {
       else skipped++;
     }
 
-    let insertedCount = 0;
+    // 手動で「特別：」タグ付け済みの既存行は、丸くん/ユーザーの分類（費目・金額の上書き含む）を
+    // 保護するため同期で上書きしない。該当 external_id を upsert 対象から除外する。
+    let lockedCount = 0;
+    let recordsToUpsert = records;
     if (records.length) {
+      const extIds = records.map((r) => r.external_id);
+      const { data: locked, error: lockErr } = await db
+        .from("expense_transactions")
+        .select("external_id")
+        .eq("user_id", userId)
+        .in("external_id", extIds)
+        .like("description", "特別%");
+      if (lockErr) throw lockErr;
+      const lockedSet = new Set((locked ?? []).map((r: { external_id: string }) => r.external_id));
+      lockedCount = lockedSet.size;
+      recordsToUpsert = records.filter((r) => !lockedSet.has(r.external_id));
+    }
+
+    let insertedCount = 0;
+    if (recordsToUpsert.length) {
       // on_conflict=user_id,external_id で merge upsert（ignoreDuplicatesではなく更新も反映する）
       const { data, error } = await db
         .from("expense_transactions")
-        .upsert(records, { onConflict: "user_id,external_id" })
+        .upsert(recordsToUpsert, { onConflict: "user_id,external_id" })
         .select("id");
       if (error) throw error;
-      insertedCount = data?.length ?? records.length;
+      insertedCount = data?.length ?? recordsToUpsert.length;
     }
 
-    const message = `期間 ${fromDate}〜${toDate} / 取得仕訳 ${journals.length}件 / upsert ${insertedCount}件 / 対象外 ${skipped}件`;
+    const message = `期間 ${fromDate}〜${toDate} / 取得仕訳 ${journals.length}件 / upsert ${insertedCount}件 / 特別保護 ${lockedCount}件 / 対象外 ${skipped}件`;
     await insertSyncLog(db, userId, true, insertedCount, message);
 
     return new Response(
