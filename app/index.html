@@ -194,6 +194,7 @@
   <main>
     <!-- DASHBOARD -->
     <section id="tab-dash">
+      <div id="d-brief"></div>
       <div id="d-banner"></div>
       <div class="grid2m" style="margin-bottom:14px">
         <div class="stat"><div class="k" id="d-allow-k">今日あと使える額（変動費）</div><div class="big-num" id="d-allow">—</div><div class="s" id="d-allow-sub"></div></div>
@@ -594,7 +595,7 @@ $("#month").onchange = ()=>{ if(!$("#month").value) $("#month").value=thisYM(); 
 /* ===================== DATA LOAD（1往復でまとめて） ===================== */
 async function loadAll(){
   const year=curYear(), ym=curMonth();
-  const [cats, cards, txns, plans, buds, ys, lims, recs] = await Promise.all([
+  const [cats, cards, txns, plans, buds, ys, lims, recs, briefs] = await Promise.all([
     sb.from("expense_categories").select("*").eq("is_active",true).order("sort_order"),
     sb.from("expense_cards").select("*").eq("is_active",true).order("sort_order"),
     sb.from("expense_transactions").select("*").gte("txn_date",year+"-01-01").lt("txn_date",(year+1)+"-01-01").order("txn_date"),
@@ -603,7 +604,9 @@ async function loadAll(){
     sb.from("expense_year_settings").select("*").eq("year",year).maybeSingle(),
     sb.from("expense_card_limits").select("*").like("year_month",year+"-%"),
     sb.from("expense_recurring").select("*").eq("is_active",true).order("day_of_month"),
+    sb.from("expense_briefings").select("*").order("brief_date",{ascending:false}).order("created_at",{ascending:false}).limit(5),
   ]);
+  DATA.briefings = briefs.data||[];
   CATEGORIES = cats.data||[]; CARDS = cards.data||[];
   catByName={}; catById={};
   CATEGORIES.forEach(c=>{ catByName[normalize(c.name)]=c; catById[c.id]=c; });
@@ -623,8 +626,26 @@ async function reloadAll(){
   finally{ document.body.classList.remove("loading"); }
 }
 function renderAll(){
-  renderDashboard(); renderDaily(); renderTxns(); renderCards();
+  renderBriefing(); renderDashboard(); renderDaily(); renderTxns(); renderCards();
   renderYear(); loadPlanIntoForm(); renderRecurring(); populateRecurSelects(); renderItems();
+}
+/* ☀️ 丸くんの朝礼＋⚠️再認証アラート（バックエンドが expense_briefings に書き込み、ここで表示） */
+function renderBriefing(){
+  const el=$("#d-brief"); if(!el) return;
+  const briefs=DATA.briefings||[];
+  const cut=(days)=>{ const d=new Date(); d.setDate(d.getDate()-days); return fmtDate(d); };
+  const card=(b)=>{
+    const cls=b.severity==="alert"?"alert":(b.severity==="warn"?"warn":"ok");
+    const body=esc(b.body||"").replace(/\n/g,"<br>")
+      .replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">再認証はこちら</a>');
+    return `<div class="banner ${cls}" style="white-space:normal">${body}</div>`;
+  };
+  let html="";
+  const alert=briefs.find(b=>b.kind==="alert" && b.brief_date>=cut(1));
+  if(alert) html+=card(alert);
+  const morning=briefs.find(b=>b.kind==="morning" && b.brief_date>=cut(2));
+  if(morning) html+=card(morning);
+  el.innerHTML=html;
 }
 
 /* ===================== 計算コア ===================== */
