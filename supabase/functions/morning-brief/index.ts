@@ -69,23 +69,40 @@ Deno.serve(async (req) => {
     const safetyLine = Number(ys?.min_balance ?? 0);
     const txns = (txnsRaw ?? []) as Txn[];
 
-    // ---- 現在残高 = opening_balance + 今日までの cash/bank 実績純額（「予定：」は除く） ----
-    let currentBalance = openingBalance;
+    // ---- 日別 純額（cash/bank）を「実績が予定を上書き」で確定する ----
+    // MoneyForwardの実データは約2週間遅れて届く。予測（「予定：」）の日付が過ぎた瞬間に
+    // 残高計算から抜け落ちると、給料日など予測日が過ぎるたびに残高・底が壊れる。
+    // そこで「予測を実績扱い」する：ある日に実績（非「予定：」）が1件でもあればその日は実績を採用し、
+    // 実績がまだ無い日は予定で埋める（＝MF未着分は予測で計上、実績が届いたら自動で上書き）。
+    // 同じ日に予定と実績が両方ある移行期（MF同期直後）でも、実績のみを採るので二重計上しない。
+    // 現金(cash)はMFに連携されず永久に実績が来ないため、常に予定で埋まる（見込み計算）。
+    const actualByDate = new Map<string, number>();
+    const planByDate = new Map<string, number>();
+    const hasActualByDate = new Set<string>();
     for (const t of txns) {
       if (!isBalancePay(t.payment_type)) continue;
-      if (t.txn_date > today) continue;
-      if (isPlanned(t.description)) continue;
-      currentBalance += t.direction === "income" ? Number(t.amount) : -Number(t.amount);
+      const amt = t.direction === "income" ? Number(t.amount) : -Number(t.amount);
+      if (isPlanned(t.description)) {
+        planByDate.set(t.txn_date, (planByDate.get(t.txn_date) || 0) + amt);
+      } else {
+        actualByDate.set(t.txn_date, (actualByDate.get(t.txn_date) || 0) + amt);
+        hasActualByDate.add(t.txn_date);
+      }
+    }
+    /** その日の確定純額：実績があれば実績、無ければ予定。 */
+    const effectiveNet = (d: string): number =>
+      hasActualByDate.has(d) ? (actualByDate.get(d) || 0) : (planByDate.get(d) || 0);
+
+    // ---- 現在残高 = opening_balance + 今日までの確定純額（実績優先・未着日は予定） ----
+    const allDates = new Set<string>([...actualByDate.keys(), ...planByDate.keys()]);
+    let currentBalance = openingBalance;
+    for (const d of allDates) {
+      if (d > today) continue;
+      currentBalance += effectiveNet(d);
     }
 
-    // ---- 前日比 = 本日の実績純額 ----
-    let todayNet = 0;
-    for (const t of txns) {
-      if (!isBalancePay(t.payment_type)) continue;
-      if (t.txn_date !== today) continue;
-      if (isPlanned(t.description)) continue;
-      todayNet += t.direction === "income" ? Number(t.amount) : -Number(t.amount);
-    }
+    // ---- 前日比 = 本日の確定純額 ----
+    const todayNet = effectiveNet(today);
 
     // ---- 今日の予定 = 今日日付の「予定：」行（cash/bank） ----
     const todayPlans = txns.filter(
@@ -111,21 +128,13 @@ Deno.serve(async (req) => {
       cardFree.push({ name: c.name, free: limit - actual - planned });
     }
 
-    // ---- 最低残高予測 = 今日残高から年末まで日次ウォーク（cash/bankの予定・実績を日付順に適用） ----
-    const dayNet = new Map<string, number>();
-    for (const t of txns) {
-      if (!isBalancePay(t.payment_type)) continue;
-      if (t.txn_date < today) continue; // 過去は既にcurrentBalanceへ反映済み
-      if (t.txn_date === today && !isPlanned(t.description)) continue; // 今日の実績も反映済み（今日の予定のみ以降のウォークに使う）
-      const amt = t.direction === "income" ? Number(t.amount) : -Number(t.amount);
-      dayNet.set(t.txn_date, (dayNet.get(t.txn_date) || 0) + amt);
-    }
+    // ---- 最低残高予測 = 今日残高から年末まで日次ウォーク（確定純額を日付順に適用） ----
+    // currentBalance は既に今日ぶんを含むので、ウォークは翌日から。将来日は実績が無いので予定で埋まる。
     let walkBal = currentBalance;
-    let minBal = currentBalance;
+    let minBal = currentBalance; // 今日残高も底の候補
     let minDate = today;
-    for (let d = today; d <= yearEnd; d = addDaysJST(d, 1)) {
-      const net = dayNet.get(d) || 0;
-      walkBal += net;
+    for (let d = addDaysJST(today, 1); d <= yearEnd; d = addDaysJST(d, 1)) {
+      walkBal += effectiveNet(d);
       if (walkBal < minBal) {
         minBal = walkBal;
         minDate = d;
