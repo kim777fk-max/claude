@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scene1</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
+        /* ---------- scenes ---------- */
+        .clip {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        }
+        .scene-inner {
+        position: absolute;
+        left: 0;
+        top: 84px;
+        width: 100%;
+        height: 560px;
+        padding: 0 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 48px;
+        }
+        .left {
+        width: 520px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        }
+        .kicker {
+        font-size: 18px;
+        color: var(--ai);
+        letter-spacing: 0.12em;
+        font-weight: 700;
+        }
+        .clock {
+        font-size: 96px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        }
+        .headline {
+        font-size: 46px;
+        font-weight: 700;
+        line-height: 1.25;
+        max-width: 520px;
+        }
+        .hl {
+        display: block;
+        white-space: nowrap;
+        }
+        .sub {
+        font-size: 22px;
+        font-weight: 400;
+        color: var(--muted);
+        line-height: 1.5;
+        max-width: 500px;
+        }
+
+        /* chat window (scene 1) */
+        .chat {
+        width: 520px;
+        height: 480px;
+        background: var(--card);
+        border: 2px solid var(--line);
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: 0 18px 40px rgba(27, 34, 48, 0.12);
+        display: flex;
+        flex-direction: column;
+        }
+        .chat-head {
+        height: 58px;
+        flex: 0 0 58px;
+        background: var(--chat);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 22px;
+        font-size: 20px;
+        font-weight: 700;
+        }
+        .chat-head .unread {
+        font-size: 16px;
+        background: #ffffff;
+        color: var(--chat);
+        border-radius: 999px;
+        padding: 2px 12px;
+        }
+        .chat-body {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+        }
+        .feed {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        }
+        .msg {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        width: 100%;
+        }
+        .who {
+        font-size: 16px;
+        color: var(--muted);
+        }
+        .bubble {
+        position: relative;
+        display: block;
+        width: 400px;
+        font-size: 20px;
+        line-height: 1.45;
+        background: var(--chat-soft);
+        border-radius: 16px;
+        padding: 10px 16px;
+        }
+        .tag {
+        position: absolute;
+        right: -62px;
+        top: 10px;
+        display: block;
+        width: 54px;
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+        color: #ffffff;
+        background: var(--ai);
+        border-radius: 8px;
+        padding: 2px 0;
+        }
+
+
+      </style>
+      <div id="root" data-composition-id="scene1" data-width="1280" data-height="720">
+        <div id="s1" class="scene-inner">
+        <div class="left">
+        <div id="s1-kicker" class="kicker mono">STEP 1 ／ 夕方の確認</div>
+        <div id="s1-clock" class="clock mono">18:00</div>
+        <div id="s1-head" class="headline"><span class="hl">LINEの業務連絡を</span><span class="hl">AIがまとめて確認</span></div>
+        <div id="s1-sub" class="sub">終業前、流れていった依頼を見落とさない。</div>
+        </div>
+        <div id="chat" class="chat">
+        <div class="chat-head">
+        <span>LINE｜業務連絡トーク</span>
+        <span class="unread mono">未読 6</span>
+        </div>
+        <div class="chat-body">
+        <div id="feed" class="feed" data-layout-allow-overflow>
+        <div class="msg m m1"><span class="who">取引先A</span><span class="bubble b">明日の午前中に見積をいただけますか？<span class="tag t1">依頼</span></span></div>
+        <div class="msg m m2"><span class="who">社内B</span><span class="bubble">了解です、共有ありがとうございます</span></div>
+        <div class="msg m m3"><span class="who">店舗C</span><span class="bubble b">木曜の会議室、予約をお願いします<span class="tag t1">依頼</span></span></div>
+        <div class="msg m m4"><span class="who">社内B</span><span class="bubble b">資料の修正は金曜17時まででお願いします<span class="tag t1">依頼</span></span></div>
+        <div class="msg m m5"><span class="who">取引先A</span><span class="bubble">いつもありがとうございます</span></div>
+        <div class="msg m m6"><span class="who">経理D</span><span class="bubble b">請求書の確認を月末までにお願いします<span class="tag t1">依頼</span></span></div>
+        </div>
+        </div>
+        </div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        // ===== Scene 1 (0-5s): feed-rush transcript =====
+        tl.fromTo("#s1-kicker", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out" }, 0.05);
+        tl.fromTo("#s1-clock", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.6)" }, 0.12);
+        tl.fromTo("#s1-head", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.3);
+        tl.fromTo("#s1-sub", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.out" }, 0.6);
+        tl.fromTo("#chat", { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.55, ease: "power4.out" }, 0.1);
+        tl.fromTo(".m", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out", stagger: 0.28 }, 0.5);
+        // element scroll: feed climbs so the last messages are in view
+        tl.fromTo("#feed", { y: 0 }, { y: -150, duration: 0.9, ease: "power3.inOut" }, 2.25);
+        // messages leaving the top edge fade out (content fade at frame edge)
+        tl.to(".m1, .m2", { opacity: 0, duration: 0.45, ease: "power1.in" }, 2.3);
+        // hinge: request bubbles get marked, tags pop
+        tl.to(".b", { backgroundColor: "#fff0b8", duration: 0.25, stagger: 0.18 }, 3.25);
+        tl.fromTo(".t1", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2.2)", stagger: 0.18 }, 3.3);
+        tl.to("#s1", { opacity: 0, duration: 0.3, ease: "power1.in" }, 4.7);
+
+        window.__timelines["scene1"] = tl;
+      </script>
+    </template>
+  </body>
+</html>
