@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scene3</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
+        .stage {
+          position: absolute;
+          inset: 0;
+        }
+        .head {
+          position: absolute;
+          left: var(--safe);
+          right: var(--safe);
+          top: 88px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+        }
+        .kicker {
+          font-family: var(--mono);
+          font-size: 17px;
+          font-weight: 700;
+          color: var(--special);
+          letter-spacing: 0.12em;
+        }
+        .headline {
+          font-family: var(--display);
+          font-size: 42px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+        /* timeline axis: today 18:00 -> tomorrow 9:00 */
+        .axis {
+          position: absolute;
+          left: 250px;
+          top: 214px;
+          display: block;
+          width: 700px;
+          height: 60px;
+        }
+        .t-label {
+          position: absolute;
+          top: 196px;
+          font-family: var(--mono);
+          font-size: 18px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .t-left {
+          left: 214px;
+          color: var(--accent);
+        }
+        .t-right {
+          left: 890px;
+          color: var(--info-ink);
+        }
+        .night {
+          position: absolute;
+          left: 430px;
+          top: 250px;
+          width: 340px;
+          text-align: center;
+          font-size: 17px;
+          font-weight: 700;
+          color: var(--special);
+        }
+        .src {
+          position: absolute;
+          left: var(--safe);
+          top: 376px;
+          width: 330px;
+          background: var(--panel);
+          border: 2px solid var(--accent);
+          border-radius: var(--r-lg);
+          box-shadow: var(--shadow-md);
+          padding: 22px 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .src-big {
+          font-family: var(--display);
+          font-size: 34px;
+          font-weight: 900;
+        }
+        .src-sub {
+          font-size: 17px;
+          color: var(--muted);
+        }
+        .agenda {
+          position: absolute;
+          left: 640px;
+          top: 300px;
+          width: 560px;
+          height: 262px;
+          background: var(--panel);
+          border: 2px solid var(--info);
+          border-radius: var(--r-lg);
+          box-shadow: var(--shadow-md);
+        }
+        .agenda-title {
+          position: absolute;
+          left: 28px;
+          right: 28px;
+          top: 16px;
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          font-family: var(--display);
+          font-size: 21px;
+          font-weight: 900;
+          padding-bottom: 8px;
+          border-bottom: 2px solid var(--line);
+        }
+        .agenda-title .mono {
+          font-family: var(--mono);
+          font-size: 20px;
+          color: var(--info-ink);
+        }
+        .items {
+          position: absolute;
+          left: 640px;
+          top: 364px;
+          width: 560px;
+          padding: 0 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          height: 42px;
+          font-size: 19px;
+          font-weight: 700;
+        }
+        .n {
+          flex: 0 0 28px;
+          width: 28px;
+          height: 28px;
+          border-radius: var(--r-sm);
+          background: var(--accent);
+          color: var(--on-accent);
+          font-family: var(--mono);
+          font-size: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .when {
+          margin-left: auto;
+          font-family: var(--mono);
+          font-size: 16px;
+          color: var(--accent);
+        }
+        .closing {
+          position: absolute;
+          left: var(--safe);
+          right: var(--safe);
+          bottom: 84px;
+          display: flex;
+          justify-content: center;
+          align-items: baseline;
+          gap: 20px;
+        }
+        .closing-line {
+          font-family: var(--display);
+          font-size: 28px;
+          font-weight: 900;
+        }
+        .closing-note {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--muted);
+        }
+      </style>
+      <div id="root" data-composition-id="scene3" data-width="1280" data-height="720">
+        <div id="s3" class="stage">
+          <div class="head">
+            <div id="s3-kicker" class="kicker">STEP 3 ／ 引き継ぎ</div>
+            <div id="s3-head" class="headline">翌朝の朝会へ、そのまま渡す</div>
+          </div>
+          <span id="tl-left" class="t-label t-left">今日 18:00</span>
+          <span id="tl-right" class="t-label t-right">翌朝 9:00</span>
+          <svg id="axis" class="axis" viewBox="0 0 700 60">
+            <path id="axis-line" d="M24 30 L676 30" fill="none" stroke="#9b7be0" stroke-width="4" stroke-linecap="round" stroke-dasharray="652" stroke-dashoffset="652" />
+            <circle id="dot-a" cx="24" cy="30" r="10" fill="#f2a03d" />
+            <circle id="dot-b" cx="676" cy="30" r="10" fill="#3e8fe0" />
+          </svg>
+          <div id="night" class="night">夜のあいだに期限順へ整理</div>
+          <div id="src" class="src">
+            <span class="src-big">依頼 4件</span>
+            <span class="src-sub">期限つきで抽出済み（例）</span>
+          </div>
+          <div id="agenda" class="agenda">
+            <div class="agenda-title"><span>朝会アジェンダ</span><span class="mono">9:00</span></div>
+          </div>
+          <div class="items">
+            <div class="item it"><span class="n">1</span><span>見積を送付する</span><span class="when">明日 午前</span></div>
+            <div class="item it"><span class="n">2</span><span>会議室を予約する</span><span class="when">木曜</span></div>
+            <div class="item it"><span class="n">3</span><span>資料を修正する</span><span class="when">金曜 17:00</span></div>
+            <div class="item it"><span class="n">4</span><span>請求書を確認する</span><span class="when">月末</span></div>
+          </div>
+          <div class="closing">
+            <span id="closing-line" class="closing-line">AIは整理役。決めるのは朝会の人。</span>
+            <span id="closing-note" class="closing-note">※ 構想・例示です</span>
+          </div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s3", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.out" }, 0);
+        tl.fromTo("#s3-kicker", { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }, 0.05);
+        tl.fromTo("#s3-head", { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.6)" }, 0.12);
+        tl.fromTo("#dot-a", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 0.35);
+        tl.fromTo("#tl-left", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3 }, 0.35);
+        tl.fromTo("#src", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.45);
+        tl.to("#axis-line", { attr: { "stroke-dashoffset": 0 }, duration: 0.9, ease: "power2.inOut" }, 0.8);
+        tl.fromTo("#night", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 1.1);
+        tl.fromTo("#dot-b", { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2.4)", transformOrigin: "50% 50%" }, 1.65);
+        tl.fromTo("#tl-right", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3 }, 1.65);
+        tl.fromTo("#agenda", { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.4)" }, 1.75);
+        // tasks travel from the 18:00 side into the 9:00 agenda
+        tl.fromTo(".it", { opacity: 0, x: -420 }, { opacity: 1, x: 0, duration: 0.55, ease: "power3.out", stagger: 0.22 }, 2.0);
+        tl.fromTo("#closing-line", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 3.3);
+        tl.fromTo("#closing-note", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 3.6);
+        window.__timelines["scene3"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

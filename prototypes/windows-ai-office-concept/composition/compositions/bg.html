@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>bg</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
+        /* ---------- background layer ---------- */
+        .bg-grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+        repeating-linear-gradient(0deg, rgba(47, 79, 196, 0.07) 0 1px, transparent 1px 40px),
+        repeating-linear-gradient(90deg, rgba(47, 79, 196, 0.07) 0 1px, transparent 1px 40px);
+        }
+        .bg-glow {
+        position: absolute;
+        left: 640px;
+        top: 120px;
+        width: 720px;
+        height: 720px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(47, 79, 196, 0.16) 0%, rgba(47, 79, 196, 0) 65%);
+        }
+        .dial {
+        position: absolute;
+        left: -120px;
+        top: 250px;
+        display: block;
+        width: 560px;
+        height: 560px;
+        opacity: 0.5;
+        }
+        .hand {
+        position: absolute;
+        left: -120px;
+        top: 250px;
+        display: block;
+        width: 560px;
+        height: 560px;
+        opacity: 0.5;
+        }
+
+
+      </style>
+      <div id="root" data-composition-id="bg" data-width="1280" data-height="720">
+        <div class="bg-grid"></div>
+        <div id="glow" class="bg-glow"></div>
+        <svg id="dial" class="dial" viewBox="0 0 560 560">
+          <circle cx="280" cy="280" r="250" fill="none" stroke="#c9cfe6" stroke-width="6" />
+          <circle cx="280" cy="280" r="206" fill="none" stroke="#dcdfea" stroke-width="3" stroke-dasharray="4 28" />
+          <path d="M280 280 L280 138" stroke="#b7bfdc" stroke-width="10" stroke-linecap="round" />
+          <circle cx="280" cy="280" r="12" fill="#b7bfdc" />
+        </svg>
+        <svg id="hand" class="hand" viewBox="0 0 560 560">
+          <path d="M280 280 L280 70" stroke="#9aa6d6" stroke-width="6" stroke-linecap="round" />
+        </svg>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        // ---- ambient background (finite, seek-safe) ----
+        tl.fromTo("#glow", { scale: 0.9, opacity: 0.8 }, { scale: 1.08, opacity: 1, duration: 7.5, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+        tl.fromTo("#hand", { rotation: 0 }, { rotation: 360, duration: 15, ease: "none", transformOrigin: "50% 50%" }, 0);
+        tl.fromTo("#dial", { rotation: 0 }, { rotation: 45, duration: 15, ease: "none", transformOrigin: "50% 50%" }, 0);
+
+        window.__timelines["bg"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

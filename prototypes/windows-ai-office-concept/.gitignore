@@ -1,0 +1,7 @@
+node_modules/
+out/
+composition/snapshots/
+composition-v2/snapshots/
+composition-v2/.hyperframes/
+composition/.hyperframes/
+*.zip

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scene2</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
+        /* ---------- scenes ---------- */
+        .clip {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        }
+        .scene-inner {
+        position: absolute;
+        left: 0;
+        top: 84px;
+        width: 100%;
+        height: 560px;
+        padding: 0 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 48px;
+        }
+        .left {
+        width: 520px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        }
+        .kicker {
+        font-size: 18px;
+        color: var(--ai);
+        letter-spacing: 0.12em;
+        font-weight: 700;
+        }
+        .clock {
+        font-size: 96px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        }
+        .headline {
+        font-size: 46px;
+        font-weight: 700;
+        line-height: 1.25;
+        max-width: 520px;
+        }
+        .hl {
+        display: block;
+        white-space: nowrap;
+        }
+        .sub {
+        font-size: 22px;
+        font-weight: 400;
+        color: var(--muted);
+        line-height: 1.5;
+        max-width: 500px;
+        }
+
+        /* loader + result card (scene 2) */
+        .loader {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        height: 48px;
+        }
+        .spinner {
+        display: block;
+        width: 40px;
+        height: 40px;
+        }
+        .status-stack {
+        position: relative;
+        height: 40px;
+        width: 380px;
+        }
+        .status {
+        position: absolute;
+        left: 0;
+        top: 0;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--ai);
+        white-space: nowrap;
+        }
+        .status.done-text {
+        color: var(--done);
+        }
+        .card {
+        width: 560px;
+        background: var(--card);
+        border: 2px solid var(--line);
+        border-radius: 22px;
+        box-shadow: 0 18px 40px rgba(27, 34, 48, 0.12);
+        padding: 22px 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        }
+        .card-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 22px;
+        font-weight: 700;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--line);
+        }
+        .card-title .mono {
+        font-size: 16px;
+        color: var(--muted);
+        }
+        .row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        height: 64px;
+        padding: 0 12px;
+        border-radius: 14px;
+        background: #f6f4ee;
+        }
+        .badge {
+        position: relative;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        }
+        .badge-num,
+        .badge-check {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 700;
+        }
+        .badge-num {
+        border: 2px solid var(--ai);
+        color: var(--ai);
+        }
+        .badge-check {
+        background: var(--done);
+        color: #ffffff;
+        }
+        .task {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        }
+        .task-name {
+        font-size: 21px;
+        font-weight: 700;
+        }
+        .task-from {
+        font-size: 16px;
+        color: var(--muted);
+        }
+        .due {
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--ai);
+        background: var(--ai-soft);
+        border-radius: 999px;
+        padding: 4px 14px;
+        white-space: nowrap;
+        }
+
+
+      </style>
+      <div id="root" data-composition-id="scene2" data-width="1280" data-height="720">
+        <div id="s2" class="scene-inner">
+        <div class="left">
+        <div id="s2-kicker" class="kicker mono">STEP 2 ／ 抽出</div>
+        <div id="s2-head" class="headline"><span class="hl">依頼と期限だけを</span><span class="hl">自動で抜き出す</span></div>
+        <div id="s2-sub" class="sub">雑談・お礼は除外。誰から／何を／いつまで。</div>
+        <div class="loader">
+        <svg id="spinner" class="spinner" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="16" fill="none" stroke="#e3e8fb" stroke-width="5" />
+        <path d="M20 4 A16 16 0 0 1 36 20" fill="none" stroke="#2f4fc4" stroke-width="5" stroke-linecap="round" />
+        </svg>
+        <div class="status-stack">
+        <span id="st1" class="status">メッセージを読み取り中…</span>
+        <span id="st2" class="status">依頼かどうかを判定中…</span>
+        <span id="st3" class="status done-text">抽出完了：依頼 4件</span>
+        </div>
+        </div>
+        </div>
+        <div id="result" class="card">
+        <div class="card-title"><span>抽出結果</span><span class="mono">18:00 時点</span></div>
+        <div class="row r">
+        <div class="badge"><span class="badge-num bn">1</span><span class="badge-check ck">✓</span></div>
+        <div class="task"><span class="task-name">見積を送付する</span><span class="task-from">取引先Aから</span></div>
+        <span class="due">明日 午前</span>
+        </div>
+        <div class="row r">
+        <div class="badge"><span class="badge-num bn">2</span><span class="badge-check ck">✓</span></div>
+        <div class="task"><span class="task-name">会議室を予約する</span><span class="task-from">店舗Cから</span></div>
+        <span class="due">木曜</span>
+        </div>
+        <div class="row r">
+        <div class="badge"><span class="badge-num bn">3</span><span class="badge-check ck">✓</span></div>
+        <div class="task"><span class="task-name">資料を修正する</span><span class="task-from">社内Bから</span></div>
+        <span class="due">金曜 17:00</span>
+        </div>
+        <div class="row r">
+        <div class="badge"><span class="badge-num bn">4</span><span class="badge-check ck">✓</span></div>
+        <div class="task"><span class="task-name">請求書を確認する</span><span class="task-from">経理Dから</span></div>
+        <span class="due">月末</span>
+        </div>
+        </div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        // ===== Scene 2 (5-10s): agent progress theater =====
+        tl.fromTo("#s2", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.out" }, 0);
+        tl.fromTo("#s2-kicker", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out" }, 0.05);
+        tl.fromTo("#s2-head", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.15);
+        tl.fromTo("#s2-sub", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.out" }, 0.45);
+        // spinner: finite rotation, stops when the result lands
+        tl.fromTo("#spinner", { rotation: 0 }, { rotation: 1080, duration: 3.0, ease: "none", transformOrigin: "50% 50%" }, 0.3);
+        tl.to("#spinner", { opacity: 0.25, duration: 0.2 }, 3.3);
+        // status couplets swap
+        tl.fromTo("#st1", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.25 }, 0.35);
+        tl.to("#st1", { opacity: 0, y: -10, duration: 0.2 }, 1.6);
+        tl.fromTo("#st2", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.25 }, 1.7);
+        tl.to("#st2", { opacity: 0, y: -10, duration: 0.2 }, 3.1);
+        tl.fromTo("#st3", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.25, ease: "back.out(2)" }, 3.25);
+        // receipt card + rows cascade
+        tl.fromTo("#result", { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.5)" }, 0.5);
+        tl.fromTo(".r", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out", stagger: 0.35 }, 1);
+        // badges flip to checks one by one
+        tl.to(".bn", { opacity: 0, scale: 0.6, duration: 0.2, stagger: 0.28 }, 3.2);
+        tl.fromTo(".ck", { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2.4)", stagger: 0.28 }, 3.2);
+        tl.to("#s2", { opacity: 0, duration: 0.3, ease: "power1.in" }, 4.7);
+
+        window.__timelines["scene2"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

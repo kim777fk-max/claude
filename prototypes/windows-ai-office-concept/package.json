@@ -1,0 +1,16 @@
+{
+  "name": "windows-ai-office-concept",
+  "version": "1.0.0",
+  "description": "Concept film prototype (HyperFrames). Not a live service.",
+  "scripts": {
+    "check": "cd composition && hyperframes check --snapshots",
+    "render": "cd composition && hyperframes render --quality delivery --fps 30 --output ../out/windows-ai-office-concept_1280x720_15s.mp4",
+    "check:v2": "cd composition-v2 && hyperframes check --snapshots",
+    "render:v2": "cd composition-v2 && hyperframes render --quality delivery --fps 30 --output ../out/windows-ai-office-concept_v2-pro_1280x720_15s.mp4"
+  },
+  "devDependencies": {
+    "gsap": "3.14.2",
+    "hyperframes": "0.8.91"
+  },
+  "private": true
+}

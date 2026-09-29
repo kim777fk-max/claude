@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>chrome</title>
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
+        .topbar {
+          position: absolute;
+          left: var(--safe);
+          right: var(--safe);
+          top: 26px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .brand {
+          display: flex;
+          align-items: baseline;
+          gap: 14px;
+        }
+        .brand-name {
+          font-family: var(--display);
+          font-size: 22px;
+          font-weight: 900;
+          color: var(--ink);
+        }
+        .brand-tag {
+          font-family: var(--mono);
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--accent);
+          letter-spacing: 0.1em;
+        }
+        .badge {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--on-accent);
+          background: var(--accent);
+          border-radius: 999px;
+          padding: 6px 18px;
+        }
+        .steps {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 22px;
+          display: flex;
+          justify-content: center;
+          gap: 14px;
+        }
+        .step {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--muted);
+          background: var(--panel);
+          border: 2px solid var(--line);
+          border-radius: 999px;
+          padding: 5px 18px;
+        }
+      </style>
+      <div id="root" data-composition-id="chrome" data-width="1280" data-height="720">
+        <div class="topbar">
+          <div class="brand">
+            <span class="brand-name">Windows AI オフィス構想</span>
+            <span class="brand-tag">CONCEPT</span>
+          </div>
+          <span class="badge">構想段階｜実在のサービスではありません</span>
+        </div>
+        <div class="steps">
+          <span id="step1" class="step">① 18:00 確認</span>
+          <span id="step2" class="step">② 依頼・期限を抽出</span>
+          <span id="step3" class="step">③ 翌朝の朝会へ</span>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        const on = { backgroundColor: "#f2a03d", color: "#0c1c2e", borderColor: "#f2a03d", duration: 0.3 };
+        const off = { backgroundColor: "#16293d", color: "#9fb4c8", borderColor: "rgba(255,255,255,0.1)", duration: 0.3 };
+        tl.to("#step1", on, 0);
+        tl.to("#step1", off, 5);
+        tl.to("#step2", on, 5);
+        tl.to("#step2", off, 10);
+        tl.to("#step3", on, 10);
+        window.__timelines["chrome"] = tl;
+      </script>
+    </template>
+  </body>
+</html>
