@@ -7,7 +7,15 @@
 - 登場する送信者・文面はすべて架空（取引先A・社内B・店舗C・経理D）。個人情報なし
 - LINE / Windows は文字表記のみ。ロゴや商標デザインは使用していない
 
-## 構成
+## バージョン
+| 版 | フォルダ | 見た目 | MP4（gitignore対象・`out/`） |
+|---|---|---|---|
+| v1 ベースライン | `composition/` | 生成り＋青。そのまま保存（sha256 は `out/baseline_v1.sha256`） | `windows-ai-office-concept_1280x720_15s.mp4` |
+| v2 pro | `composition-v2/` | Mac 正典の pro テーマ（紺＋アンバー）。場面ごとに配置を変え、フォントは同梱。理由は `composition-v2/DESIGN_NOTES.md` | `windows-ai-office-concept_v2-pro_1280x720_15s.mp4` |
+
+どちらも無音。ナレーション／HeyGen アバターの差し替え手順は `composition-v2/NARRATION.md`（未実施）。
+
+## 構成（v1。v2 も同じファイル構成）
 ```
 composition/
   BRIEF.md                 意図・制約（HyperFrames brief 形式）
@@ -30,10 +38,13 @@ npx hyperframes browser ensure                # chrome-headless-shell
 cd composition
 npx hyperframes check --snapshots             # lint + runtime + layout + motion + contrast
 npx hyperframes render --quality delivery --fps 30 --output ../out/windows-ai-office-concept_1280x720_15s.mp4
+# v2: cd ../composition-v2 で同じ check を実行し、出力名を windows-ai-office-concept_v2-pro_1280x720_15s.mp4 にする
 ```
 
 ## 注意（検証で分かったこと）
-- `hyperframes-creative/typography.md` は Noto Sans JP を「同梱」と記載しているが、v0.8.91 の実ログでは
+- v1 のみ: `hyperframes-creative/typography.md` は Noto Sans JP を「同梱」と記載しているが、v0.8.91 の実ログでは
   **ビルド時に Google Fonts から取得**し（APIキー不要・無料）、`~/.cache/hyperframes/fonts/` にキャッシュして
   決定的な `@font-face` を注入していた。オフライン環境では初回コンパイルに失敗する可能性がある（未検証）。
 - HyperFrames の各スキルは `npx hyperframes skills update general-video` でコンテナの `~/.claude/skills/` に導入した（リポジトリ外）。
+- v2 はサブセット woff2 を `@font-face` でローカル参照している。レンダーログは
+  `Embedded local font file: assets/fonts/...` となり、Google Fonts からの取得は発生していない。
